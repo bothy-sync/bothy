@@ -388,6 +388,18 @@ impl<'a> Decoder<'a> {
         Ok((key, encoded))
     }
 
+    /// A map key that must be a byte string and sort strictly after `prev` (the previous
+    /// key's encoding). Returns the key and its encoding for the next call.
+    pub fn map_bytes_key(&mut self, prev: Option<&[u8]>) -> Result<(&'a [u8], &'a [u8])> {
+        let start = self.pos;
+        let key = self.bytes()?;
+        let encoded = &self.data[start..self.pos];
+        if prev.is_some_and(|p| p >= encoded) {
+            return Err(corrupt("map keys are not in canonical order or repeat"));
+        }
+        Ok((key, encoded))
+    }
+
     /// Consumes `null` if it is next.
     pub fn null_if_present(&mut self) -> Result<bool> {
         if self.peek()? == NULL {

@@ -15,10 +15,12 @@ categories = ["database", "network-programming"]
 
 [dependencies]
 base64 = "0.23"
+blake3 = "1.8"
 fs4 = "1.1"
 getrandom = "0.4"
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde_json = "1"
+zstd = "0.14"
 
 [dev-dependencies]
 ciborium = "0.2"
