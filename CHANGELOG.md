@@ -8,6 +8,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- Client-side encryption (`crypto` feature, on by default): XChaCha20-Poly1305 for segment
+  bodies, snapshot chunks and `device.json`, with a random data key wrapped under an
+  Argon2id-derived key in per-device key files (`keys/<device>/key-<hlc>.json`).
+- `Config::encrypt`, `Config::password`, `Config::key` and `Config::kdf_cost`;
+  `Database::{is_encrypted, is_locked, unlock, unlock_with_key, lock, export_key,
+  change_password}`, mirrored in the blocking API. A password unlocks offline from the cached
+  key file.
+- Password change re-wraps the data key; the old password stops working on every device and
+  `SyncReport::password_changed` reports it. Cached data keys keep working.
+- `ErrorKind::KeyRequired` for syncing a locked database.
+- Conformance vectors for the crypto primitives and encrypted segments and snapshots; a fuzz
+  target for key files and sealed JSON; encrypted seeds in the simulation.
+
+### Changed
+
+- A segment with the encrypted flag and no key now fails with `KeyRequired` instead of
+  `FormatTooNew` (vector `segment/invalid.json`, case `encrypted_without_key`).
+
 ## [0.1.0]
 
 First working release: the local-first engine, the Google Drive backend and the CLI.

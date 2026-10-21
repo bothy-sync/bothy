@@ -3,6 +3,7 @@
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
 
 use super::{Store, get_meta, set_meta};
+use crate::codec::DataKey;
 use crate::codec::cbor::Decoder;
 use crate::codec::decode_op;
 use crate::codec::segment::{self, Segment};
@@ -86,7 +87,12 @@ impl Store {
     }
 
     /// Packs unpacked outbox ops into segments and queues them for upload, in one transaction.
-    pub fn pack_outbox(&mut self, db_id: DbId, limits: PackLimits) -> Result<Packed> {
+    pub fn pack_outbox(
+        &mut self,
+        db_id: DbId,
+        limits: PackLimits,
+        key: Option<&DataKey>,
+    ) -> Result<Packed> {
         let device_id = self.device;
         let mut seq = self.next_seq()?;
         let tx = self
@@ -122,15 +128,19 @@ impl Store {
                     Ok(op)
                 })
                 .collect::<Result<Vec<_>>>()?;
-            let bytes = segment::encode(
-                &Segment {
-                    db_id,
-                    device_id,
-                    seq,
-                    ops,
-                },
-                limits.compress,
-            )?;
+            let seg = Segment {
+                db_id,
+                device_id,
+                seq,
+                ops,
+            };
+            let bytes = match key {
+                None => segment::encode(&seg, limits.compress)?,
+                #[cfg(feature = "crypto")]
+                Some(k) => segment::encode_encrypted(&seg, limits.compress, k)?,
+                #[cfg(not(feature = "crypto"))]
+                Some(k) => match *k {},
+            };
             let seq_sql = seq as i64;
             tx.execute(
                 "INSERT INTO pending_uploads (seq, file_id, bytes, state) VALUES (?1, NULL, ?2, 'pending')",

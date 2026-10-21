@@ -26,11 +26,12 @@ pub struct CompactReport {
 pub(crate) async fn create_snapshot(inner: &Arc<Inner>, db_id: DbId) -> Result<String> {
     for _ in 0..3 {
         let device = inner.device();
+        let key = super::sync_key(inner).await?;
         let (hlc, vv, bytes) = inner
             .store(move |s| {
                 let hlc = s.tick()?;
                 let compress = s.compress()?;
-                let (vv, bytes) = s.build_snapshot(db_id, hlc, compress)?;
+                let (vv, bytes) = s.build_snapshot(db_id, hlc, compress, key.as_ref())?;
                 Ok((hlc, vv, bytes))
             })
             .await?;
@@ -78,7 +79,7 @@ async fn newest_snapshots(inner: &Inner, db_id: DbId) -> Result<Vec<Candidate>> 
 
 /// Downloads a snapshot and reads its version vector. `None` if gone or invalid.
 async fn fetch(
-    inner: &Inner,
+    inner: &Arc<Inner>,
     db_id: DbId,
     (key, device, hlc): &Candidate,
     report: &mut SyncReport,
@@ -92,7 +93,8 @@ async fn fetch(
         device_id: *device,
         hlc: *hlc,
     };
-    match SnapshotReader::open(&bytes, &expected) {
+    let data_key = super::sync_key(inner).await?;
+    match SnapshotReader::open_with(&bytes, &expected, data_key.as_ref()) {
         Ok(r) => {
             let vv = r.header().vv.clone();
             Ok(Some((bytes, vv)))
@@ -114,6 +116,7 @@ async fn apply(
     bytes: Vec<u8>,
     report: &mut SyncReport,
 ) -> Result<()> {
+    let data_key = super::sync_key(inner).await?;
     let changed = inner
         .store(move |s| {
             let expected = snapshot::Expected {
@@ -121,7 +124,7 @@ async fn apply(
                 device_id: device,
                 hlc,
             };
-            let reader = SnapshotReader::open(&bytes, &expected)?;
+            let reader = SnapshotReader::open_with(&bytes, &expected, data_key.as_ref())?;
             s.apply_snapshot(&key, &reader)
         })
         .await?;

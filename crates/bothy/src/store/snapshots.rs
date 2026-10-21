@@ -9,6 +9,7 @@ use super::{
     log_conflicts, save_doc, set_meta, visible_doc,
 };
 use crate::Hlc;
+use crate::codec::DataKey;
 use crate::codec::cbor::{Decoder, Encoder};
 use crate::codec::snapshot::{SnapshotHeader, SnapshotReader, SnapshotWriter, VersionVector};
 use crate::codec::{decode_op, encode_op};
@@ -87,6 +88,7 @@ impl Store {
         db_id: DbId,
         hlc: Hlc,
         compress: bool,
+        key: Option<&DataKey>,
     ) -> Result<(VersionVector, Vec<u8>)> {
         let vv = self.snapshot_vv()?;
         let header = SnapshotHeader {
@@ -95,7 +97,14 @@ impl Store {
             hlc,
             vv: vv.clone(),
         };
-        let mut w = SnapshotWriter::new(header, compress);
+        let w = SnapshotWriter::new(header, compress);
+        let mut w = match key {
+            None => w,
+            #[cfg(feature = "crypto")]
+            Some(k) => w.encrypted(k.clone()),
+            #[cfg(not(feature = "crypto"))]
+            Some(k) => match *k {},
+        };
         let mut stmt = self.conn.prepare(
             "SELECT collection, doc_id FROM fields
              UNION SELECT collection, doc_id FROM doc_tombstones

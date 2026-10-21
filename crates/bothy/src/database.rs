@@ -45,6 +45,20 @@ pub struct Config {
     pub(crate) policy: SnapshotPolicy,
     pub(crate) device_name: Option<String>,
     pub(crate) id_seed: Option<u64>,
+    #[cfg(feature = "crypto")]
+    pub(crate) secret: Option<Secret>,
+    #[cfg(feature = "crypto")]
+    pub(crate) encrypt: bool,
+    #[cfg(feature = "crypto")]
+    pub(crate) kdf_cost: (u32, u32, u32),
+}
+
+/// How a device unlocks an encrypted database.
+#[cfg(feature = "crypto")]
+#[derive(Clone)]
+pub(crate) enum Secret {
+    Password(zeroize::Zeroizing<String>),
+    Key(crate::crypto::DataKey),
 }
 
 impl std::fmt::Debug for Config {
@@ -68,7 +82,47 @@ impl Config {
             policy: SnapshotPolicy::default(),
             device_name: None,
             id_seed: None,
+            #[cfg(feature = "crypto")]
+            secret: None,
+            #[cfg(feature = "crypto")]
+            encrypt: false,
+            #[cfg(feature = "crypto")]
+            kdf_cost: (64 * 1024, 3, 1),
         }
+    }
+
+    /// Creates the database encrypted with this password (`init`), and unlocks with it.
+    #[cfg(feature = "crypto")]
+    pub fn encrypt(mut self, password: &str) -> Self {
+        self.encrypt = true;
+        self.secret = Some(Secret::Password(zeroize::Zeroizing::new(
+            password.to_owned(),
+        )));
+        self
+    }
+
+    /// Unlocks an encrypted database with this password (on `open` and `join`).
+    #[cfg(feature = "crypto")]
+    pub fn password(mut self, password: &str) -> Self {
+        self.secret = Some(Secret::Password(zeroize::Zeroizing::new(
+            password.to_owned(),
+        )));
+        self
+    }
+
+    /// Unlocks an encrypted database with a data key cached by the app.
+    #[cfg(feature = "crypto")]
+    pub fn key(mut self, key: crate::crypto::DataKey) -> Self {
+        self.secret = Some(Secret::Key(key));
+        self
+    }
+
+    /// Argon2id cost for key files this device writes (memory in KiB, passes, lanes). The
+    /// default is 64 MiB, 3, 1; weak devices and tests may lower it.
+    #[cfg(feature = "crypto")]
+    pub fn kdf_cost(mut self, m_kib: u32, t: u32, p: u32) -> Self {
+        self.kdf_cost = (m_kib, t, p);
+        self
     }
 
     /// Derives every new id (device, database, fork) from `seed` instead of the system random
@@ -150,6 +204,9 @@ pub struct SyncReport {
     pub gaps: Vec<(DeviceId, u64)>,
     /// Set if this device took a new id because another install used the old one.
     pub forked_to: Option<DeviceId>,
+    /// Set if another device changed the password of this encrypted database. This device
+    /// stays unlocked; the new password is needed next time it unlocks with a password.
+    pub password_changed: bool,
     /// Remote files skipped because they failed validation.
     pub skipped: Vec<String>,
 }
@@ -167,6 +224,7 @@ impl SyncReport {
         self.deleted_files += o.deleted_files;
         self.gaps = o.gaps;
         self.forked_to = o.forked_to.or(self.forked_to);
+        self.password_changed |= o.password_changed;
         self.skipped.extend(o.skipped);
     }
 }
@@ -179,6 +237,14 @@ pub(crate) struct Inner {
     pub(crate) device_name: Option<String>,
     pub(crate) pack: PackLimits,
     pub(crate) policy: SnapshotPolicy,
+    /// The data key while unlocked; never written to disk by the core.
+    pub(crate) key: RwLock<Option<crate::codec::DataKey>>,
+    #[cfg(feature = "crypto")]
+    pub(crate) secret: Mutex<Option<Secret>>,
+    #[cfg(feature = "crypto")]
+    pub(crate) encrypt: bool,
+    #[cfg(feature = "crypto")]
+    pub(crate) kdf_cost: (u32, u32, u32),
     pub(crate) sync_lock: tokio::sync::Mutex<()>,
     pub(crate) events: broadcast::Sender<ChangeEvent>,
     pub(crate) poke: Notify,
@@ -187,6 +253,14 @@ pub(crate) struct Inner {
 impl Inner {
     pub(crate) fn device(&self) -> DeviceId {
         *self.device.read().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub(crate) fn key(&self) -> Option<crate::codec::DataKey> {
+        self.key.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    pub(crate) fn set_key(&self, key: Option<crate::codec::DataKey>) {
+        *self.key.write().unwrap_or_else(|e| e.into_inner()) = key;
     }
 
     pub(crate) fn set_device(&self, d: DeviceId) {
@@ -248,12 +322,18 @@ impl Database {
             policy,
             device_name,
             id_seed,
+            #[cfg(feature = "crypto")]
+            secret,
+            #[cfg(feature = "crypto")]
+            encrypt,
+            #[cfg(feature = "crypto")]
+            kdf_cost,
         } = config;
         let store = tokio::task::spawn_blocking(move || Store::open_with(path, clock, id_seed))
             .await
             .map_err(|e| Error::new(ErrorKind::Internal, "open task failed").with_source(e))??;
         let (events, _) = broadcast::channel(1024);
-        Ok(Database {
+        let db = Database {
             inner: Arc::new(Inner {
                 device: RwLock::new(store.device_id()),
                 store: Mutex::new(store),
@@ -265,8 +345,23 @@ impl Database {
                 sync_lock: tokio::sync::Mutex::new(()),
                 events,
                 poke: Notify::new(),
+                key: RwLock::new(None),
+                #[cfg(feature = "crypto")]
+                secret: Mutex::new(secret),
+                #[cfg(feature = "crypto")]
+                encrypt,
+                #[cfg(feature = "crypto")]
+                kdf_cost,
             }),
-        })
+        };
+        // An encrypted database opened with a password or key unlocks right away, offline.
+        #[cfg(feature = "crypto")]
+        if let Some(db_id) = db.db_id().await?
+            && db.is_encrypted().await?
+        {
+            crate::engine::crypto::unlock_with_secret(&db.inner, db_id).await?;
+        }
+        Ok(db)
     }
 
     /// This device's id.
@@ -370,6 +465,53 @@ impl Database {
     /// The remote store this database syncs through (for inspection tools).
     pub fn remote(&self) -> &Arc<dyn RemoteStore> {
         &self.inner.remote
+    }
+
+    /// Whether the database is encrypted.
+    pub async fn is_encrypted(&self) -> Result<bool> {
+        Ok(self.inner.store(|s| s.key_check()).await?.is_some())
+    }
+
+    /// Whether the database is encrypted and not unlocked yet.
+    pub async fn is_locked(&self) -> Result<bool> {
+        Ok(self.is_encrypted().await? && self.inner.key().is_none())
+    }
+
+    /// Unlocks an encrypted database with its password. Works offline once the device has
+    /// seen the database's newest key file. Fails with `WrongPassword`.
+    #[cfg(feature = "crypto")]
+    pub async fn unlock(&self, password: &str) -> Result<()> {
+        let db_id = self.attached().await?;
+        crate::engine::crypto::unlock_password(&self.inner, db_id, password).await
+    }
+
+    /// Unlocks with a data key cached by the app (see [`Database::export_key`]).
+    #[cfg(feature = "crypto")]
+    pub async fn unlock_with_key(&self, key: crate::crypto::DataKey) -> Result<()> {
+        let db_id = self.attached().await?;
+        crate::engine::crypto::unlock_key(&self.inner, db_id, key).await
+    }
+
+    /// Forgets the data key in memory; syncing needs an unlock again.
+    pub fn lock(&self) {
+        self.inner.set_key(None);
+    }
+
+    /// The data key, for an app that caches it in secure storage. Treat it like the password.
+    #[cfg(feature = "crypto")]
+    pub fn export_key(&self) -> Result<crate::crypto::DataKey> {
+        self.inner
+            .key()
+            .ok_or_else(|| Error::new(ErrorKind::KeyRequired, "the database is locked"))
+    }
+
+    /// Changes the password: the data key is re-wrapped under the new password, and the old
+    /// password stops unlocking the database. Needs the network.
+    #[cfg(feature = "crypto")]
+    pub async fn change_password(&self, old: &str, new: &str) -> Result<()> {
+        let db_id = self.attached().await?;
+        let _sync = self.inner.sync_lock.lock().await;
+        crate::engine::crypto::change_password(&self.inner, db_id, old, new).await
     }
 
     async fn attached(&self) -> Result<DbId> {

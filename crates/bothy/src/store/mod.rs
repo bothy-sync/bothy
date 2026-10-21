@@ -2,6 +2,7 @@
 //!
 //! This is the synchronous layer under the (upcoming) async `Database` API.
 
+mod encryption;
 mod schema;
 mod snapshots;
 mod status;

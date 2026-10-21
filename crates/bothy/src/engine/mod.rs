@@ -1,5 +1,7 @@
 //! Sync engine: creating and joining databases, push and pull.
 
+#[cfg(feature = "crypto")]
+pub(crate) mod crypto;
 mod maintenance;
 mod scheduler;
 
@@ -44,7 +46,24 @@ async fn upload_device_info(inner: &Arc<Inner>, db_id: DbId) -> Result<()> {
         bothy_version: Some(env!("CARGO_PKG_VERSION").to_owned()),
         created_hlc,
     };
-    put_once(inner, &LogicalKey::device(db_id, device), &info.to_json()).await
+    let key = LogicalKey::device(db_id, device);
+    #[cfg(feature = "crypto")]
+    let body = crypto::seal_json(inner.key().as_ref(), &key.to_string(), info.to_json())?;
+    #[cfg(not(feature = "crypto"))]
+    let body = info.to_json();
+    put_once(inner, &key, &body).await
+}
+
+/// The data key for remote files: `None` for an unencrypted database, `KeyRequired` while an
+/// encrypted one is locked.
+pub(crate) async fn sync_key(inner: &Arc<Inner>) -> Result<Option<crate::codec::DataKey>> {
+    #[cfg(feature = "crypto")]
+    return crypto::required_key(inner).await;
+    #[cfg(not(feature = "crypto"))]
+    {
+        let _ = inner;
+        Ok(None)
+    }
 }
 
 fn already_attached(db: DbId) -> Error {
@@ -72,6 +91,11 @@ pub(crate) async fn init(inner: &Arc<Inner>) -> Result<DbId> {
     let created_hlc = inner.store(|s| s.tick()).await?;
     let mut manifest = Manifest::new(db_id, inner.device(), created_hlc, &inner.app_id)?;
     manifest.grace_period_days = inner.policy.grace_period_days;
+    // The first key file goes up before the manifest.
+    #[cfg(feature = "crypto")]
+    {
+        manifest.encryption = crypto::create(inner, db_id).await?;
+    }
     put_once(inner, &LogicalKey::manifest(db_id), &manifest.to_json()).await?;
     upload_device_info(inner, db_id).await?;
     attach(inner, &manifest).await?;
@@ -90,7 +114,7 @@ async fn fetch_manifest(inner: &Inner, db_id: DbId) -> Result<Manifest> {
             )
         })?;
     let manifest = Manifest::from_json(&bytes, Some(db_id))?;
-    if manifest.encryption.is_some() {
+    if cfg!(not(feature = "crypto")) && manifest.encryption.is_some() {
         return Err(Error::format_too_new(
             "database is encrypted; this build has no encryption support",
         ));
@@ -112,6 +136,10 @@ pub(crate) async fn join(inner: &Arc<Inner>, db_id: DbId) -> Result<SyncReport> 
                         "database {db_id} belongs to app {}, not {}",
                         manifest.app_id, inner.app_id
                     )));
+                }
+                #[cfg(feature = "crypto")]
+                if let Some(info) = &manifest.encryption {
+                    crypto::join(inner, db_id, info).await?;
                 }
                 upload_device_info(inner, db_id).await?;
                 attach(inner, &manifest).await?;
@@ -155,7 +183,11 @@ pub(crate) async fn init_or_join(inner: &Arc<Inner>) -> Result<DbId> {
 async fn push(inner: &Arc<Inner>, db_id: DbId, report: &mut SyncReport) -> Result<()> {
     let mut limits = inner.pack;
     limits.compress = inner.store(|s| s.compress()).await? && limits.compress;
-    let packed = inner.store(move |s| s.pack_outbox(db_id, limits)).await?;
+    let data_key = sync_key(inner).await?;
+    let k = data_key.clone();
+    let packed = inner
+        .store(move |s| s.pack_outbox(db_id, limits, k.as_ref()))
+        .await?;
     report.pushed_ops += packed.ops;
 
     let mut forks = 0;
@@ -201,7 +233,10 @@ async fn push(inner: &Arc<Inner>, db_id: DbId, report: &mut SyncReport) -> Resul
                         ));
                     }
                     fork(inner, db_id, report).await?;
-                    let packed = inner.store(move |s| s.pack_outbox(db_id, limits)).await?;
+                    let k = data_key.clone();
+                    let packed = inner
+                        .store(move |s| s.pack_outbox(db_id, limits, k.as_ref()))
+                        .await?;
                     report.pushed_ops += packed.ops;
                     continue 'retry;
                 }
@@ -326,6 +361,11 @@ async fn pull(
         entries,
         next_cursor,
     } = fetched;
+    #[cfg(feature = "crypto")]
+    if crypto::on_entries(inner, db_id, &entries).await? {
+        report.password_changed = true;
+    }
+    let data_key = sync_key(inner).await?;
     for (device, seq, key) in remote_segments(db_id, inner.device(), &entries) {
         if inner.store(move |s| s.is_applied(device, seq)).await? {
             continue;
@@ -339,7 +379,7 @@ async fn pull(
             device_id: device,
             seq,
         };
-        let seg = match segment::decode(&bytes, &expected) {
+        let seg = match segment::decode_with(&bytes, &expected, data_key.as_ref()) {
             Ok(seg) => seg,
             Err(e) if e.kind() == ErrorKind::Corrupt => {
                 report.skipped.push(format!("{key}: {}", e.message()));
@@ -378,6 +418,8 @@ pub(crate) async fn sync(inner: &Arc<Inner>) -> Result<SyncReport> {
     let db_id = inner.store(|s| s.db_id()).await?.ok_or_else(|| {
         Error::invalid_input("database is not initialised; call init or join first")
     })?;
+    // Fail fast while an encrypted database is locked.
+    sync_key(inner).await?;
     let mut report = SyncReport::default();
     let fetched = fetch(inner, db_id).await?;
     check_fork(inner, db_id, &fetched.entries, &mut report).await?;

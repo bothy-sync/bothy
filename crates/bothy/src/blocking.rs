@@ -86,6 +86,45 @@ impl Database {
         self.run(self.db.sync())
     }
 
+    /// See [`crate::Database::is_encrypted`].
+    pub fn is_encrypted(&self) -> Result<bool> {
+        self.run(self.db.is_encrypted())
+    }
+
+    /// See [`crate::Database::is_locked`].
+    pub fn is_locked(&self) -> Result<bool> {
+        self.run(self.db.is_locked())
+    }
+
+    /// See [`crate::Database::unlock`].
+    #[cfg(feature = "crypto")]
+    pub fn unlock(&self, password: &str) -> Result<()> {
+        self.run(self.db.unlock(password))
+    }
+
+    /// See [`crate::Database::unlock_with_key`].
+    #[cfg(feature = "crypto")]
+    pub fn unlock_with_key(&self, key: crate::crypto::DataKey) -> Result<()> {
+        self.run(self.db.unlock_with_key(key))
+    }
+
+    /// See [`crate::Database::lock`].
+    pub fn lock(&self) {
+        self.db.lock();
+    }
+
+    /// See [`crate::Database::export_key`].
+    #[cfg(feature = "crypto")]
+    pub fn export_key(&self) -> Result<crate::crypto::DataKey> {
+        self.db.export_key()
+    }
+
+    /// See [`crate::Database::change_password`].
+    #[cfg(feature = "crypto")]
+    pub fn change_password(&self, old: &str, new: &str) -> Result<()> {
+        self.run(self.db.change_password(old, new))
+    }
+
     /// See [`crate::Database::snapshot`].
     pub fn snapshot(&self) -> Result<String> {
         self.run(self.db.snapshot())
