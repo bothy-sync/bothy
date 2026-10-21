@@ -44,6 +44,28 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p bothy --features test-util --test simulation --release --locked
 
+  deny:
+    name: cargo deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
+  cross:
+    name: Cross build (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-unknown-linux-gnu, armv7-unknown-linux-gnueabihf]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+      - run: cross build --locked --release -p bothy-cli --target ${{ matrix.target }}
+
   rust-msrv:
     name: Rust MSRV (1.88)
     runs-on: ubuntu-latest

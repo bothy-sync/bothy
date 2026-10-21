@@ -24,11 +24,11 @@ impl Paths {
                 data: home.join("data"),
             });
         }
-        let dirs = directories::BaseDirs::new()
+        let (config, data) = platform_dirs()
             .ok_or_else(|| CliError::usage("cannot find the home directory; set BOTHY_HOME"))?;
         Ok(Self {
-            config: dirs.config_dir().join("bothy"),
-            data: dirs.data_dir().join("bothy"),
+            config: config.join("bothy"),
+            data: data.join("bothy"),
         })
     }
 
@@ -47,6 +47,33 @@ impl Paths {
     pub fn db_file(&self, name: &str) -> PathBuf {
         self.data.join(format!("{name}.db"))
     }
+}
+
+fn env_dir(name: &str) -> Option<PathBuf> {
+    std::env::var_os(name)
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+}
+
+/// Base config and data directories: XDG on Linux and other Unixes, Application Support on
+/// macOS, the roaming and local AppData folders on Windows.
+fn platform_dirs() -> Option<(PathBuf, PathBuf)> {
+    if cfg!(windows) {
+        return Some((
+            env_dir("APPDATA")?,
+            env_dir("LOCALAPPDATA").or_else(|| env_dir("APPDATA"))?,
+        ));
+    }
+    let home = env_dir("HOME")?;
+    if cfg!(target_os = "macos") {
+        let support = home.join("Library/Application Support");
+        return Some((support.clone(), support));
+    }
+    Some((
+        env_dir("XDG_CONFIG_HOME").unwrap_or_else(|| home.join(".config")),
+        env_dir("XDG_DATA_HOME").unwrap_or_else(|| home.join(".local/share")),
+    ))
 }
 
 /// Writes a file readable only by the owner.

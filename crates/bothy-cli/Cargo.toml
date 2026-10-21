@@ -21,7 +21,6 @@ async-trait = "0.1"
 base64 = "0.23"
 bothy.workspace = true
 clap = { version = "4.6", features = ["derive", "env"] }
-directories = "6"
 getrandom = "0.4"
 keyring = "4.2"
 open = "5.4"
