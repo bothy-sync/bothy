@@ -196,8 +196,15 @@ fn offline() -> Error {
 }
 
 fn take(n: &AtomicUsize) -> bool {
-    n.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| v.checked_sub(1))
-        .is_ok()
+    // A compare_exchange loop works on every supported toolchain.
+    let mut cur = n.load(Ordering::SeqCst);
+    while cur > 0 {
+        match n.compare_exchange(cur, cur - 1, Ordering::SeqCst, Ordering::SeqCst) {
+            Ok(_) => return true,
+            Err(now) => cur = now,
+        }
+    }
+    false
 }
 
 #[async_trait]
