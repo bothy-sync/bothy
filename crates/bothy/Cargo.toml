@@ -17,6 +17,7 @@ categories = ["database", "network-programming"]
 getrandom = "0.4"
 
 [dev-dependencies]
+ciborium = "0.2"
 proptest = "1.12"
 
 [lints]
