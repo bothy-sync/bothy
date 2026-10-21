@@ -14,18 +14,21 @@ keywords = ["sync", "local-first", "offline", "google-drive", "hlc"]
 categories = ["database", "network-programming"]
 
 [dependencies]
+async-trait = "0.1"
 base64 = "0.23"
 blake3 = "1.8"
 fs4 = "1.1"
 getrandom = "0.4"
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde_json = "1"
+tokio = { version = "1.54", features = ["macros", "rt", "sync", "time"] }
 zstd = "0.14"
 
 [dev-dependencies]
 ciborium = "0.2"
 proptest = "1.12"
 tempfile = "3"
+tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "test-util"] }
 
 [lints]
 workspace = true

@@ -26,6 +26,7 @@ mod error;
 mod hlc;
 pub mod merge;
 pub mod model;
+pub mod remote;
 pub mod store;
 
 pub use error::{Error, ErrorKind, Result};
