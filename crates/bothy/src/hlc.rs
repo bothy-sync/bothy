@@ -87,6 +87,24 @@ impl FromStr for Hlc {
     }
 }
 
+/// Wall-clock source in milliseconds since the Unix epoch. Tests inject a fake one.
+pub trait Clock: Send + Sync {
+    /// Current wall-clock time in milliseconds.
+    fn now_ms(&self) -> u64;
+}
+
+/// The operating system clock.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SystemClock;
+
+impl Clock for SystemClock {
+    fn now_ms(&self) -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis() as u64)
+    }
+}
+
 /// Produces monotonically increasing [`Hlc`] timestamps for one device.
 ///
 /// The wall clock is passed in explicitly so callers (and tests) control the time source.
@@ -258,5 +276,35 @@ mod tests {
         let persisted = Hlc::from_parts(T + 500, 2).unwrap();
         let mut c = HlcClock::resume(persisted);
         assert!(c.now(T) > persisted);
+    }
+
+    #[test]
+    fn system_clock_is_after_2020() {
+        assert!(SystemClock.now_ms() > 1_577_836_800_000);
+    }
+
+    proptest::proptest! {
+        // Local and observed timestamps are strictly increasing whatever the wall clock does.
+        #[test]
+        fn strictly_increasing_under_any_wall_clock(
+            steps in proptest::collection::vec(
+                (0u64..=MAX_PHYSICAL_MS + 10, proptest::option::of(proptest::num::u64::ANY)),
+                1..200,
+            )
+        ) {
+            let mut c = HlcClock::new();
+            let mut prev = Hlc::ZERO;
+            for (wall, remote) in steps {
+                let next = match remote {
+                    Some(r) => c.observe(Hlc::from_u64(r), wall),
+                    None => c.now(wall),
+                };
+                if prev == Hlc(u64::MAX) {
+                    break; // saturated: the 48-bit range is exhausted
+                }
+                proptest::prop_assert!(next > prev);
+                prev = next;
+            }
+        }
     }
 }

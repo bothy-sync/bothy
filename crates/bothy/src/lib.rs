@@ -4,10 +4,10 @@
 //! Each device keeps its data in a local SQLite database, and devices exchange immutable,
 //! append-only files through the user's own cloud storage (Google Drive first).
 //!
-//! **Status: early development.** This release only contains the [`Hlc`] (hybrid logical
-//! clock) that orders every change in Bothy, plus the on-remote format constants. The sync
-//! engine, the Drive backend and the CLI are being built at
-//! <https://github.com/bothy-sync/bothy>.
+//! **Status: early development.** This crate currently contains the data model
+//! ([`Value`], [`Op`]) and the
+//! [`Hlc`] (hybrid logical clock) that orders every change. The local store, the sync engine,
+//! the Drive backend and the CLI are being built at <https://github.com/bothy-sync/bothy>.
 //!
 //! ```
 //! use bothy::{Hlc, HlcClock};
@@ -21,9 +21,13 @@
 
 #![forbid(unsafe_code)]
 
+mod error;
 mod hlc;
+pub mod model;
 
-pub use hlc::{DEFAULT_MAX_DRIFT_MS, Hlc, HlcClock, ParseHlcError};
+pub use error::{Error, ErrorKind, Result};
+pub use hlc::{Clock, DEFAULT_MAX_DRIFT_MS, Hlc, HlcClock, ParseHlcError, SystemClock};
+pub use model::{CollectionName, DbId, DeviceId, DocId, FieldName, Op, OpKind, Stamp, Value};
 
 /// Version of the on-remote file format written by this crate (`bothy_format` in
 /// `manifest.json`). Draft: the format is not frozen until `SPEC.md` v1.
