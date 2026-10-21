@@ -372,7 +372,10 @@ impl Sim {
             .unwrap_or_else(|e| panic!("seed {seed}: join: {e}"));
 
         let key = self.data_key().await;
-        assert_eq!(self.db(0).await.is_encrypted().await.unwrap(), self.encrypted());
+        assert_eq!(
+            self.db(0).await.is_encrypted().await.unwrap(),
+            self.encrypted()
+        );
         let expected = oracle(self.remote.inner(), db_id, key.as_ref()).await;
         for i in 0..self.devices.len() {
             let dump = self.db(i).await.canonical_dump().await.unwrap();
