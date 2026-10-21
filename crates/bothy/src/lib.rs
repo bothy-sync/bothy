@@ -36,6 +36,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod auth;
 #[cfg(feature = "blocking")]
 pub mod blocking;
 pub mod codec;
