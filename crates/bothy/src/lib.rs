@@ -40,6 +40,8 @@ pub mod auth;
 #[cfg(feature = "blocking")]
 pub mod blocking;
 pub mod codec;
+#[cfg(feature = "crypto")]
+pub mod crypto;
 mod database;
 mod engine;
 mod error;

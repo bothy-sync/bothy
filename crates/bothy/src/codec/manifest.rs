@@ -1,5 +1,7 @@
 //! `manifest.json` and `device.json`.
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as B64;
 use serde_json::{Map, Value as J, json};
 
 use crate::Hlc;
@@ -18,6 +20,16 @@ pub enum Compression {
     None,
 }
 
+/// `manifest.encryption`: the cipher and a check value that proves a data key is this
+/// database's. Wrapped keys live in key files.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EncryptionInfo {
+    /// `nonce || ciphertext || tag` of a fixed string under the data key.
+    pub key_check: Vec<u8>,
+}
+
+const ALG: &str = "xchacha20poly1305";
+
 /// Database-wide settings, written once by the creating device.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Manifest {
@@ -33,9 +45,8 @@ pub struct Manifest {
     pub app_schema_version: u64,
     /// Default compression for writers.
     pub compression: Compression,
-    /// Encryption parameters (`null` for unencrypted databases). Kept as raw JSON until
-    /// encryption support lands.
-    pub encryption: Option<J>,
+    /// Set for encrypted databases.
+    pub encryption: Option<EncryptionInfo>,
     /// Days a covered segment or superseded snapshot is kept before deletion.
     pub grace_period_days: u32,
 }
@@ -114,7 +125,7 @@ impl Manifest {
             "app_id": self.app_id,
             "app_schema_version": self.app_schema_version,
             "codec": {"serialization": "cbor", "compression": compression},
-            "encryption": self.encryption.clone().unwrap_or(J::Null),
+            "encryption": self.encryption.as_ref().map_or(J::Null, |e| json!({"alg": ALG, "key_check": B64.encode(&e.key_check)})),
             "compaction": {"grace_period_days": self.grace_period_days},
         });
         serde_json::to_vec_pretty(&v).expect("JSON values always serialize")
@@ -168,7 +179,16 @@ impl Manifest {
         };
         let encryption = match field(&obj, "encryption")? {
             J::Null => None,
-            v @ J::Object(_) => Some(v.clone()),
+            J::Object(e) => {
+                match str_field(e, "alg")? {
+                    ALG => {}
+                    other => return Err(Error::format_too_new(format!("unknown cipher {other}"))),
+                }
+                let check = B64
+                    .decode(str_field(e, "key_check")?)
+                    .map_err(|_| corrupt("key_check must be base64"))?;
+                Some(EncryptionInfo { key_check: check })
+            }
             _ => return Err(corrupt("encryption must be an object or null")),
         };
         let compaction = field(&obj, "compaction")?
@@ -187,6 +207,73 @@ impl Manifest {
             compression,
             encryption,
             grace_period_days: grace as u32,
+        })
+    }
+}
+
+/// A key file (`<db>/keys/<device>/key-<hlc>.json`): the data key wrapped under a password.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeyFile {
+    /// Argon2id memory in KiB.
+    pub m_kib: u32,
+    /// Argon2id iterations.
+    pub t: u32,
+    /// Argon2id lanes.
+    pub p: u32,
+    /// Argon2id salt.
+    pub salt: [u8; 16],
+    /// `nonce || ciphertext || tag` of the data key under the password-derived key.
+    pub wrapped_dek: Vec<u8>,
+}
+
+impl KeyFile {
+    /// The JSON bytes to upload.
+    pub fn to_json(&self) -> Vec<u8> {
+        let v = json!({
+            "kdf": {"alg": "argon2id", "m_kib": self.m_kib, "t": self.t, "p": self.p, "salt": B64.encode(self.salt)},
+            "wrapped_dek": B64.encode(&self.wrapped_dek),
+        });
+        serde_json::to_vec_pretty(&v).expect("JSON values always serialize")
+    }
+
+    /// Parses a key file.
+    pub fn from_json(bytes: &[u8]) -> Result<Self> {
+        let obj = object(bytes, "key file")?;
+        let bad = |m: &str| Error::corrupt(format!("key file: {m}"));
+        let kdf = obj
+            .get("kdf")
+            .and_then(J::as_object)
+            .ok_or_else(|| bad("kdf must be an object"))?;
+        if kdf.get("alg").and_then(J::as_str) != Some("argon2id") {
+            return Err(Error::format_too_new(
+                "key file uses an unknown key derivation",
+            ));
+        }
+        let num = |k: &str| -> Result<u32> {
+            kdf.get(k)
+                .and_then(J::as_u64)
+                .and_then(|v| u32::try_from(v).ok())
+                .filter(|&v| v > 0)
+                .ok_or_else(|| bad("kdf parameters must be positive integers"))
+        };
+        let salt: [u8; 16] = kdf
+            .get("salt")
+            .and_then(J::as_str)
+            .and_then(|s| B64.decode(s).ok())
+            .and_then(|b| b.try_into().ok())
+            .ok_or_else(|| bad("salt must be 16 bytes of base64"))?;
+        let wrapped_dek = obj
+            .get("wrapped_dek")
+            .and_then(J::as_str)
+            .and_then(|s| B64.decode(s).ok())
+            .filter(|b| b.len() == 24 + 32 + 16)
+            .ok_or_else(|| bad("wrapped_dek must be 72 bytes of base64"))?;
+        Ok(Self {
+            m_kib: num("m_kib")?,
+            t: num("t")?,
+            p: num("p")?,
+            salt,
+            wrapped_dek,
         })
     }
 }

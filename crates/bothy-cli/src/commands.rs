@@ -627,6 +627,7 @@ pub async fn run(mut ctx: Ctx, command: Command) -> CliResult<()> {
                     Some(KeyKind::Device(_)) => "device",
                     Some(KeyKind::Segment(..)) => "segment",
                     Some(KeyKind::Snapshot(..)) => "snapshot",
+                    Some(KeyKind::KeyFile(..)) => "key",
                     None => "unknown",
                 };
                 let k = kinds.entry(kind).or_default();

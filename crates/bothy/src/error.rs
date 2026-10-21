@@ -23,6 +23,8 @@ pub enum ErrorKind {
     SchemaTooNew,
     /// The password does not unlock the database key.
     WrongPassword,
+    /// The database is encrypted and has not been unlocked with its password or key yet.
+    KeyRequired,
     /// Data failed an integrity or validity check.
     Corrupt,
     /// Another process has the local database open.
@@ -44,6 +46,7 @@ impl ErrorKind {
             ErrorKind::FormatTooNew => "format too new",
             ErrorKind::SchemaTooNew => "schema too new",
             ErrorKind::WrongPassword => "wrong password",
+            ErrorKind::KeyRequired => "encryption key required",
             ErrorKind::Corrupt => "corrupt data",
             ErrorKind::DatabaseLocked => "database locked",
             ErrorKind::InvalidInput => "invalid input",

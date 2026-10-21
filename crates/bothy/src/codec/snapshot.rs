@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use crate::Hlc;
+use crate::codec::DataKey;
 use crate::codec::cbor::{Decoder, Encoder};
 use crate::codec::segment::unzstd;
 use crate::codec::state::{decode_entry, encode_entry};
@@ -86,6 +87,8 @@ pub struct SnapshotWriter {
     pending: Vec<u8>,
     pending_count: usize,
     last: Option<(CollectionName, DocId)>,
+    key: Option<DataKey>,
+    nonces: Vec<[u8; NONCE_LEN]>,
 }
 
 impl SnapshotWriter {
@@ -99,7 +102,23 @@ impl SnapshotWriter {
             pending: Vec::new(),
             pending_count: 0,
             last: None,
+            key: None,
+            nonces: Vec::new(),
         }
+    }
+
+    /// Encrypts every chunk with the data key (`aad` = header || chunk index).
+    #[cfg(feature = "crypto")]
+    pub fn encrypted(mut self, key: DataKey) -> Self {
+        self.key = Some(key);
+        self
+    }
+
+    /// Uses these nonces for the chunks instead of random ones (conformance vectors only).
+    #[doc(hidden)]
+    pub fn with_nonces(mut self, nonces: Vec<[u8; NONCE_LEN]>) -> Self {
+        self.nonces = nonces;
+        self
     }
 
     /// Overrides the plain chunk size target (tests and conformance vectors).
@@ -164,7 +183,12 @@ impl SnapshotWriter {
         let mut out = Vec::new();
         out.extend_from_slice(&MAGIC);
         out.extend_from_slice(&VERSION.to_be_bytes());
-        let flags = if self.compress { FLAG_ZSTD } else { 0 };
+        let flags = if self.compress { FLAG_ZSTD } else { 0 }
+            | if self.key.is_some() {
+                FLAG_ENCRYPTED
+            } else {
+                0
+            };
         out.extend_from_slice(&flags.to_be_bytes());
         out.extend_from_slice(self.header.db_id.as_bytes());
         out.extend_from_slice(self.header.device_id.as_bytes());
@@ -172,11 +196,35 @@ impl SnapshotWriter {
         out.extend_from_slice(&(self.chunks.len() as u32).to_be_bytes());
         out.extend_from_slice(&(vv.len() as u32).to_be_bytes());
         out.extend_from_slice(&vv);
-        for chunk in &self.chunks {
-            out.extend_from_slice(&((NONCE_LEN + chunk.len()) as u32).to_be_bytes());
-            out.extend_from_slice(&[0u8; NONCE_LEN]);
-            out.extend_from_slice(chunk);
+        let header_len = out.len();
+        for (i, chunk) in self.chunks.iter().enumerate() {
+            #[cfg(not(feature = "crypto"))]
+            let _ = i;
+            match &self.key {
+                None => {
+                    out.extend_from_slice(&((NONCE_LEN + chunk.len()) as u32).to_be_bytes());
+                    out.extend_from_slice(&[0u8; NONCE_LEN]);
+                    out.extend_from_slice(chunk);
+                }
+                #[cfg(feature = "crypto")]
+                Some(k) => {
+                    let nonce = match self.nonces.get(i) {
+                        Some(n) => *n,
+                        None => crate::crypto::new_nonce()?,
+                    };
+                    let mut aad = out[..header_len].to_vec();
+                    aad.extend_from_slice(&(i as u32).to_be_bytes());
+                    let ct = crate::crypto::encrypt_with_nonce(k.as_bytes(), &nonce, chunk, &aad)?;
+                    out.extend_from_slice(&((NONCE_LEN + ct.len()) as u32).to_be_bytes());
+                    out.extend_from_slice(&nonce);
+                    out.extend_from_slice(&ct);
+                }
+                #[cfg(not(feature = "crypto"))]
+                Some(k) => match *k {},
+            }
         }
+        // Only the encrypted branch reads these.
+        let _ = (header_len, &self.nonces);
         let trailer = blake3::hash(&out);
         out.extend_from_slice(trailer.as_bytes());
         Ok(out)
@@ -199,7 +247,9 @@ pub struct Expected {
 pub struct SnapshotReader<'a> {
     header: SnapshotHeader,
     compressed: bool,
-    chunks: Vec<&'a [u8]>,
+    chunks: Vec<(&'a [u8], [u8; NONCE_LEN])>,
+    header_bytes: &'a [u8],
+    key: Option<DataKey>,
 }
 
 fn be16(b: &[u8], at: usize) -> u16 {
@@ -211,8 +261,13 @@ fn be32(b: &[u8], at: usize) -> u32 {
 }
 
 impl<'a> SnapshotReader<'a> {
-    /// Checks the header, ids, chunk framing and trailer.
+    /// Checks an unencrypted snapshot's header, ids, chunk framing and trailer.
     pub fn open(bytes: &'a [u8], expected: &Expected) -> Result<Self> {
+        Self::open_with(bytes, expected, None)
+    }
+
+    /// Like [`SnapshotReader::open`] for a database that is encrypted (`key` is `Some`) or not.
+    pub fn open_with(bytes: &'a [u8], expected: &Expected, key: Option<&DataKey>) -> Result<Self> {
         if bytes.len() < FIXED_HEADER_LEN + TRAILER_LEN || bytes[..4] != MAGIC {
             return Err(Error::corrupt("snapshot: bad magic or too short"));
         }
@@ -239,10 +294,25 @@ impl<'a> SnapshotReader<'a> {
         if blake3::hash(signed).as_bytes() != trailer {
             return Err(Error::corrupt("snapshot: trailer mismatch"));
         }
-        if flags & FLAG_ENCRYPTED != 0 {
-            return Err(Error::format_too_new(
-                "snapshot is encrypted; this build has no encryption support",
-            ));
+        let encrypted = flags & FLAG_ENCRYPTED != 0;
+        match (encrypted, key) {
+            (true, None) if cfg!(feature = "crypto") => {
+                return Err(Error::new(
+                    ErrorKind::KeyRequired,
+                    "snapshot is encrypted; unlock the database first",
+                ));
+            }
+            (true, None) => {
+                return Err(Error::format_too_new(
+                    "snapshot is encrypted; this build has no encryption support",
+                ));
+            }
+            (false, Some(_)) => {
+                return Err(Error::corrupt(
+                    "snapshot: plaintext snapshot in an encrypted database",
+                ));
+            }
+            _ => {}
         }
 
         let chunk_count = be32(bytes, 48) as usize;
@@ -264,15 +334,18 @@ impl<'a> SnapshotReader<'a> {
             }
             let len = be32(signed, pos) as usize;
             pos += 4;
-            if len < NONCE_LEN || len - NONCE_LEN > MAX_CHUNK_LEN || pos + len > signed.len() {
+            // Encrypted chunks carry a 16-byte tag on top of the data.
+            if len < NONCE_LEN || len - NONCE_LEN > MAX_CHUNK_LEN + 64 || pos + len > signed.len() {
                 return Err(Error::corrupt("snapshot: bad chunk length"));
             }
-            if signed[pos..pos + NONCE_LEN].iter().any(|&b| b != 0) {
+            let nonce: [u8; NONCE_LEN] =
+                signed[pos..pos + NONCE_LEN].try_into().expect("in bounds");
+            if !encrypted && nonce.iter().any(|&b| b != 0) {
                 return Err(Error::corrupt(
                     "snapshot: nonce must be zero when not encrypted",
                 ));
             }
-            chunks.push(&signed[pos + NONCE_LEN..pos + len]);
+            chunks.push((&signed[pos + NONCE_LEN..pos + len], nonce));
             pos += len;
         }
         if pos != signed.len() {
@@ -287,6 +360,8 @@ impl<'a> SnapshotReader<'a> {
             },
             compressed: flags & FLAG_ZSTD != 0,
             chunks,
+            header_bytes: &signed[..vv_end],
+            key: key.cloned(),
         })
     }
 
@@ -306,7 +381,23 @@ impl<'a> SnapshotReader<'a> {
         index: usize,
         after: Option<&(CollectionName, DocId)>,
     ) -> Result<Vec<(CollectionName, DocId, DocState)>> {
-        let data = self.chunks[index];
+        let (stored, nonce) = self.chunks[index];
+        #[cfg_attr(not(feature = "crypto"), allow(unused_variables))]
+        let decrypted: Vec<u8>;
+        let data: &[u8] = match &self.key {
+            None => stored,
+            #[cfg(feature = "crypto")]
+            Some(k) => {
+                let mut aad = self.header_bytes.to_vec();
+                aad.extend_from_slice(&(index as u32).to_be_bytes());
+                decrypted = crate::crypto::decrypt(k.as_bytes(), &nonce, stored, &aad)
+                    .ok_or_else(|| Error::corrupt("snapshot: chunk authentication failed"))?;
+                &decrypted
+            }
+            #[cfg(not(feature = "crypto"))]
+            Some(k) => match *k {},
+        };
+        let _ = (nonce, self.header_bytes);
         let owned;
         let plain = if self.compressed {
             owned = unzstd(data, MAX_CHUNK_LEN)?;
@@ -498,5 +589,60 @@ mod tests {
         bytes[n..].copy_from_slice(h.as_bytes());
         let err = read_all(&bytes).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::Corrupt);
+    }
+
+    #[cfg(feature = "crypto")]
+    #[test]
+    fn encrypted_snapshots() {
+        let key = DataKey::random().unwrap();
+        let mut w = SnapshotWriter::new(header(), true)
+            .with_chunk_target(100)
+            .encrypted(key.clone());
+        for (c, id, s) in entries(30) {
+            w.push(&c, &id, &s).unwrap();
+        }
+        let bytes = w.finish().unwrap();
+        let r = SnapshotReader::open_with(&bytes, &expected(), Some(&key)).unwrap();
+        assert!(r.chunk_count() > 1);
+        let mut got = Vec::new();
+        r.for_each_entry(|c, id, s| {
+            got.push((c, id, s));
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(got, entries(30));
+        assert_eq!(
+            SnapshotReader::open(&bytes, &expected())
+                .unwrap_err()
+                .kind(),
+            ErrorKind::KeyRequired
+        );
+        // A wrong key opens the framing but fails on the first chunk.
+        let other = DataKey::random().unwrap();
+        let r = SnapshotReader::open_with(&bytes, &expected(), Some(&other)).unwrap();
+        assert_eq!(
+            r.for_each_entry(|_, _, _| Ok(())).unwrap_err().kind(),
+            ErrorKind::Corrupt
+        );
+        // A plaintext snapshot is refused in an encrypted database.
+        let plain = write(3, false, TARGET_CHUNK_LEN);
+        assert_eq!(
+            SnapshotReader::open_with(&plain, &expected(), Some(&key))
+                .unwrap_err()
+                .kind(),
+            ErrorKind::Corrupt
+        );
+        // Swapping two chunk records breaks the chunk-index AAD even with a valid trailer.
+        let vv_end = FIXED_HEADER_LEN + be32(&bytes, 52) as usize;
+        let l1 = 4 + be32(&bytes, vv_end) as usize;
+        let l2 = 4 + be32(&bytes, vv_end + l1) as usize;
+        let mut swapped = bytes[..vv_end].to_vec();
+        swapped.extend_from_slice(&bytes[vv_end + l1..vv_end + l1 + l2]);
+        swapped.extend_from_slice(&bytes[vv_end..vv_end + l1]);
+        swapped.extend_from_slice(&bytes[vv_end + l1 + l2..bytes.len() - TRAILER_LEN]);
+        let t = blake3::hash(&swapped);
+        swapped.extend_from_slice(t.as_bytes());
+        let r = SnapshotReader::open_with(&swapped, &expected(), Some(&key)).unwrap();
+        assert!(r.for_each_entry(|_, _, _| Ok(())).is_err());
     }
 }

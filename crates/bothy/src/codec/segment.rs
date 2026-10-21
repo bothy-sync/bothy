@@ -5,7 +5,7 @@
 
 use crate::Hlc;
 use crate::codec::cbor::{Decoder, Encoder};
-use crate::codec::{decode_op, encode_op};
+use crate::codec::{DataKey, decode_op, encode_op};
 use crate::error::{Error, Result};
 use crate::model::{DbId, DeviceId, Op};
 
@@ -85,6 +85,22 @@ pub fn encode_plain(ops: &[Op]) -> Result<Vec<u8>> {
 
 /// Encodes an unencrypted segment.
 pub fn encode(segment: &Segment, compress: bool) -> Result<Vec<u8>> {
+    encode_with(segment, compress, None)
+}
+
+/// Encodes a segment encrypted with the data key and a fresh random nonce.
+#[cfg(feature = "crypto")]
+pub fn encode_encrypted(segment: &Segment, compress: bool, key: &DataKey) -> Result<Vec<u8>> {
+    encode_with(segment, compress, Some((key, crate::crypto::new_nonce()?)))
+}
+
+/// Encodes a segment; with a key and nonce the body is encrypted (`aad` = header). The explicit
+/// nonce exists for conformance vectors: writers use [`encode_encrypted`].
+pub fn encode_with(
+    segment: &Segment,
+    compress: bool,
+    key: Option<(&DataKey, [u8; 24])>,
+) -> Result<Vec<u8>> {
     check_ops(&segment.ops)?;
     if segment.seq == 0 {
         return Err(Error::invalid_input("segment seq starts at 1"));
@@ -100,8 +116,12 @@ pub fn encode(segment: &Segment, compress: bool) -> Result<Vec<u8>> {
     } else {
         (0, plain)
     };
-    let body_len = u32::try_from(body.len()).expect("bounded by MAX_PLAIN_LEN");
-    let mut out = Vec::with_capacity(HEADER_LEN + body.len() + TRAILER_LEN);
+    let (flags, nonce, stored_len) = match &key {
+        Some((_, n)) => (flags | FLAG_ENCRYPTED, *n, body.len() + 16),
+        None => (flags, [0u8; 24], body.len()),
+    };
+    let body_len = u32::try_from(stored_len).expect("bounded by MAX_PLAIN_LEN");
+    let mut out = Vec::with_capacity(HEADER_LEN + stored_len + TRAILER_LEN);
     out.extend_from_slice(&MAGIC);
     out.extend_from_slice(&VERSION.to_be_bytes());
     out.extend_from_slice(&flags.to_be_bytes());
@@ -117,9 +137,19 @@ pub fn encode(segment: &Segment, compress: bool) -> Result<Vec<u8>> {
     );
     out.extend_from_slice(&(segment.ops.len() as u32).to_be_bytes());
     out.extend_from_slice(&body_len.to_be_bytes());
-    out.extend_from_slice(&[0u8; 24]);
+    out.extend_from_slice(&nonce);
     debug_assert_eq!(out.len(), HEADER_LEN);
-    out.extend_from_slice(&body);
+    match key {
+        None => out.extend_from_slice(&body),
+        #[cfg(feature = "crypto")]
+        Some((k, n)) => {
+            let sealed =
+                crate::crypto::encrypt_with_nonce(k.as_bytes(), &n, &body, &out[..HEADER_LEN])?;
+            out.extend_from_slice(&sealed);
+        }
+        #[cfg(not(feature = "crypto"))]
+        Some((k, _)) => match *k {},
+    }
     let trailer = blake3::hash(&out);
     out.extend_from_slice(trailer.as_bytes());
     Ok(out)
@@ -156,8 +186,14 @@ pub(crate) fn unzstd(body: &[u8], limit: usize) -> Result<Vec<u8>> {
     zstd::bulk::decompress(body, limit).map_err(|_| Error::corrupt("zstd: decompression failed"))
 }
 
-/// Decodes and fully validates a segment. On any failure no op is returned.
+/// Decodes and fully validates an unencrypted segment. On any failure no op is returned.
 pub fn decode(bytes: &[u8], expected: &Expected) -> Result<Segment> {
+    decode_with(bytes, expected, None)
+}
+
+/// Decodes a segment of a database that is encrypted (`key` is `Some`) or not (`None`).
+/// An encrypted database must not contain plaintext segments, and the other way round.
+pub fn decode_with(bytes: &[u8], expected: &Expected, key: Option<&DataKey>) -> Result<Segment> {
     // 1. Size, magic, version, flags.
     if bytes.len() < HEADER_LEN + TRAILER_LEN || bytes[..4] != MAGIC {
         return Err(Error::corrupt("segment: bad magic or too short"));
@@ -202,24 +238,50 @@ pub fn decode(bytes: &[u8], expected: &Expected) -> Result<Segment> {
     }
 
     // 4. Encryption.
-    let nonce = &bytes[72..96];
-    if flags & FLAG_ENCRYPTED != 0 {
-        return Err(Error::format_too_new(
-            "segment is encrypted; this build has no encryption support",
-        ));
-    }
-    if nonce.iter().any(|&b| b != 0) {
-        return Err(Error::corrupt(
-            "segment: nonce must be zero when not encrypted",
-        ));
-    }
+    let nonce: [u8; 24] = bytes[72..96].try_into().expect("in bounds");
+    #[cfg_attr(not(feature = "crypto"), allow(unused_variables))]
+    let decrypted: Vec<u8>;
+    let body = &signed[HEADER_LEN..];
+    let body: &[u8] = match (flags & FLAG_ENCRYPTED != 0, key) {
+        (true, None) => {
+            if cfg!(feature = "crypto") {
+                return Err(Error::new(
+                    crate::ErrorKind::KeyRequired,
+                    "segment is encrypted; unlock the database first",
+                ));
+            }
+            return Err(Error::format_too_new(
+                "segment is encrypted; this build has no encryption support",
+            ));
+        }
+        #[cfg(feature = "crypto")]
+        (true, Some(k)) => {
+            decrypted = crate::crypto::decrypt(k.as_bytes(), &nonce, body, &bytes[..HEADER_LEN])
+                .ok_or_else(|| Error::corrupt("segment: authentication failed"))?;
+            &decrypted
+        }
+        #[cfg(not(feature = "crypto"))]
+        (true, Some(k)) => match *k {},
+        (false, Some(_)) => {
+            return Err(Error::corrupt(
+                "segment: plaintext segment in an encrypted database",
+            ));
+        }
+        (false, None) => {
+            if nonce.iter().any(|&b| b != 0) {
+                return Err(Error::corrupt(
+                    "segment: nonce must be zero when not encrypted",
+                ));
+            }
+            body
+        }
+    };
 
     // 5. Body.
     let op_count = be32(bytes, 64);
     if op_count == 0 || op_count > MAX_OPS {
         return Err(Error::corrupt("segment: op_count out of range"));
     }
-    let body = &signed[HEADER_LEN..];
     let plain_owned;
     let plain = if flags & FLAG_ZSTD != 0 {
         plain_owned = unzstd(body, MAX_PLAIN_LEN)?;
@@ -351,7 +413,16 @@ mod tests {
         assert_eq!(kind(&b, &exp), ErrorKind::FormatTooNew);
         let mut b = good.clone();
         b[7] = 0x02;
-        assert_eq!(kind(&reseal(b), &exp), ErrorKind::FormatTooNew);
+        let want = if cfg!(feature = "crypto") {
+            ErrorKind::KeyRequired
+        } else {
+            ErrorKind::FormatTooNew
+        };
+        assert_eq!(
+            kind(&reseal(b), &exp),
+            want,
+            "encrypted segment without a key"
+        );
 
         for wrong in [
             Expected { seq: 8, ..exp },
@@ -412,6 +483,45 @@ mod tests {
         let two = [one.clone(), one].concat();
         assert_eq!(
             decode(&build(two), &exp).unwrap_err().kind(),
+            ErrorKind::Corrupt
+        );
+    }
+
+    #[cfg(feature = "crypto")]
+    #[test]
+    fn encrypted_round_trip_and_rejections() {
+        let s = sample(20);
+        let exp = expected(&s);
+        let key = DataKey::random().unwrap();
+        for compress in [false, true] {
+            let bytes = encode_encrypted(&s, compress, &key).unwrap();
+            assert_eq!(be16(&bytes, 6) & FLAG_ENCRYPTED, FLAG_ENCRYPTED);
+            assert_eq!(decode_with(&bytes, &exp, Some(&key)).unwrap(), s);
+            // Ciphertext does not contain the plaintext.
+            assert!(!bytes.windows(11).any(|w| w == b"hello world"));
+            assert_eq!(
+                decode(&bytes, &exp).unwrap_err().kind(),
+                ErrorKind::KeyRequired
+            );
+            let other = DataKey::random().unwrap();
+            assert_eq!(
+                decode_with(&bytes, &exp, Some(&other)).unwrap_err().kind(),
+                ErrorKind::Corrupt
+            );
+        }
+        // A plaintext segment is not accepted in an encrypted database.
+        let plain = encode(&s, false).unwrap();
+        assert_eq!(
+            decode_with(&plain, &exp, Some(&key)).unwrap_err().kind(),
+            ErrorKind::Corrupt
+        );
+        // Changing the header and resealing the trailer still fails: the header is the AAD.
+        let mut b = encode_encrypted(&s, false, &key).unwrap();
+        b[63] ^= 1;
+        assert_eq!(
+            decode_with(&reseal(b), &exp, Some(&key))
+                .unwrap_err()
+                .kind(),
             ErrorKind::Corrupt
         );
     }

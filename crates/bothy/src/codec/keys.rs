@@ -23,6 +23,8 @@ pub enum KeyKind {
     Segment(DeviceId, u64),
     /// A snapshot.
     Snapshot(DeviceId, Hlc),
+    /// A key file of an encrypted database.
+    KeyFile(DeviceId, Hlc),
 }
 
 /// A parsed logical key.
@@ -67,11 +69,22 @@ impl LogicalKey {
         }
     }
 
+    /// Key of a key file.
+    pub const fn key_file(db_id: DbId, device: DeviceId, hlc: Hlc) -> Self {
+        Self {
+            db_id,
+            kind: KeyKind::KeyFile(device, hlc),
+        }
+    }
+
     /// The device that owns the file, if any (the manifest has none).
     pub fn owner(&self) -> Option<DeviceId> {
         match self.kind {
             KeyKind::Manifest => None,
-            KeyKind::Device(d) | KeyKind::Segment(d, _) | KeyKind::Snapshot(d, _) => Some(d),
+            KeyKind::Device(d)
+            | KeyKind::Segment(d, _)
+            | KeyKind::Snapshot(d, _)
+            | KeyKind::KeyFile(d, _) => Some(d),
         }
     }
 
@@ -99,6 +112,11 @@ impl LogicalKey {
                 let hlc = hex16(file.strip_prefix("snap-")?.strip_suffix(".bsnap")?)?;
                 KeyKind::Snapshot(dev, Hlc::from_u64(hlc))
             }
+            ("keys", Some(dev), Some(file), None) => {
+                let dev: DeviceId = dev.parse().ok()?;
+                let hlc = hex16(file.strip_prefix("key-")?.strip_suffix(".json")?)?;
+                KeyKind::KeyFile(dev, Hlc::from_u64(hlc))
+            }
             _ => return None,
         };
         Some(Self { db_id, kind })
@@ -118,6 +136,7 @@ impl fmt::Display for LogicalKey {
             KeyKind::Device(d) => write!(f, "{db}/devices/{d}/device.json"),
             KeyKind::Segment(d, seq) => write!(f, "{db}/devices/{d}/seg-{seq:016x}.bseg"),
             KeyKind::Snapshot(d, hlc) => write!(f, "{db}/snapshots/{d}/snap-{hlc}.bsnap"),
+            KeyKind::KeyFile(d, hlc) => write!(f, "{db}/keys/{d}/key-{hlc}.json"),
         }
     }
 }
@@ -136,6 +155,7 @@ mod tests {
             format!("{DB}/devices/{DEV}/device.json"),
             format!("{DB}/devices/{DEV}/seg-000000000000002a.bseg"),
             format!("{DB}/snapshots/{DEV}/snap-018bcfe568000001.bsnap"),
+            format!("{DB}/keys/{DEV}/key-018bcfe568000001.json"),
         ] {
             let k = LogicalKey::parse(&s).unwrap_or_else(|| panic!("{s}"));
             assert_eq!(k.to_string(), s);

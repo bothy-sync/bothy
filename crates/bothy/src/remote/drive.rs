@@ -122,6 +122,7 @@ fn app_properties(key: &str) -> J {
         KeyKind::Device(d) => ("device", Some(d), None),
         KeyKind::Segment(d, s) => ("seg", Some(d), Some(s)),
         KeyKind::Snapshot(d, _) => ("snap", Some(d), None),
+        KeyKind::KeyFile(d, _) => ("key", Some(d), None),
     };
     m.insert("bothy_kind".into(), J::String(kind.into()));
     if let Some(d) = device {
