@@ -13,6 +13,11 @@ readme = "README.md"
 keywords = ["sync", "local-first", "offline", "google-drive", "hlc"]
 categories = ["database", "network-programming"]
 
+[features]
+default = ["blocking"]
+# Synchronous API with its own runtime, for the CLI and bindings.
+blocking = ["tokio/rt-multi-thread"]
+
 [dependencies]
 async-trait = "0.1"
 base64 = "0.23"
