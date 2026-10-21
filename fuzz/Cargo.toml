@@ -1,0 +1,58 @@
+[package]
+name = "bothy-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+bothy = { path = "../crates/bothy" }
+libfuzzer-sys = "0.4"
+
+# Standalone: not part of the main workspace (needs nightly and cargo-fuzz to run).
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "cbor_value"
+path = "fuzz_targets/cbor_value.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "op"
+path = "fuzz_targets/op.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "segment"
+path = "fuzz_targets/segment.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "snapshot"
+path = "fuzz_targets/snapshot.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "manifest"
+path = "fuzz_targets/manifest.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "logical_key"
+path = "fuzz_targets/logical_key.rs"
+test = false
+doc = false
+bench = false
