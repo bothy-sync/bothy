@@ -17,7 +17,22 @@ name = "bothy"
 path = "src/main.rs"
 
 [dependencies]
+async-trait = "0.1"
+base64 = "0.23"
 bothy.workspace = true
+clap = { version = "4.6", features = ["derive", "env"] }
+directories = "6"
+getrandom = "0.4"
+keyring = "4.2"
+open = "5.4"
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "form"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+serde_json = "1"
+sha2 = "0.11"
+tokio = { version = "1.54", features = ["macros", "net", "rt-multi-thread", "signal", "time", "io-util"] }
+
+[dev-dependencies]
+tempfile = "3"
 
 [lints]
 workspace = true

@@ -1,0 +1,780 @@
+//! Command handlers.
+
+use std::collections::BTreeMap;
+use std::io::Read;
+use std::sync::Arc;
+
+use bothy::codec::keys::{KeyKind, LogicalKey};
+use bothy::codec::manifest::{DeviceInfo, Manifest};
+use bothy::merge::DocState;
+use bothy::remote::drive::DriveRemote;
+use bothy::remote::{FolderRemote, RemoteStore};
+use bothy::{
+    AutoSync, Config, Database, DbId, DeviceId, ListOptions, Origin, Stamp, SyncReport, Value,
+};
+use serde_json::{Value as J, json};
+
+use crate::cli::{Auth, Command, Devices, Inspect, Join, Setup, Snapshot};
+use crate::config::{CliConfig, DbEntry, Paths, RemoteSpec, check_db_name, write_private};
+use crate::fail::{CliError, CliResult};
+use crate::oauth::{self, SCOPE_APPDATA, SCOPE_FILE};
+use crate::tokens;
+
+pub struct Ctx {
+    pub paths: Paths,
+    pub json: bool,
+    pub db: String,
+}
+
+impl Ctx {
+    /// Prints a result: compact JSON with `--json`, otherwise the human text.
+    fn out(&self, value: J, human: impl FnOnce() -> String) {
+        if self.json {
+            println!("{value}");
+        } else {
+            let text = human();
+            if !text.is_empty() {
+                println!("{text}");
+            }
+        }
+    }
+}
+
+/// UTC time `YYYY-MM-DD HH:MM:SS` from milliseconds since the epoch.
+pub fn fmt_ms(ms: u64) -> String {
+    let secs = ms / 1000;
+    let (days, rem) = (secs / 86_400, secs % 86_400);
+    // Civil date from days since 1970-01-01 (Howard Hinnant's algorithm).
+    let z = days as i64 + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!(
+        "{y:04}-{m:02}-{d:02} {:02}:{:02}:{:02} UTC",
+        rem / 3600,
+        rem % 3600 / 60,
+        rem % 60
+    )
+}
+
+fn stamp_json(s: &Stamp) -> J {
+    json!({"hlc": s.hlc.to_hex(), "device": s.device.to_hex(), "time": fmt_ms(s.hlc.physical_ms())})
+}
+
+fn host_name() -> Option<String> {
+    std::env::var("HOSTNAME")
+        .ok()
+        .or_else(|| std::env::var("COMPUTERNAME").ok())
+        .or_else(|| std::fs::read_to_string("/etc/hostname").ok())
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty())
+}
+
+fn entry(ctx: &Ctx, config: &CliConfig) -> CliResult<DbEntry> {
+    config.dbs.get(&ctx.db).cloned().ok_or_else(|| {
+        CliError::usage(format!(
+            "no local database {:?}; create one with `bothy init` or `bothy join` (use --db to pick another)",
+            ctx.db
+        ))
+    })
+}
+
+fn remote_for(ctx: &Ctx, spec: &RemoteSpec) -> CliResult<Arc<dyn RemoteStore>> {
+    Ok(match spec {
+        RemoteSpec::Path(dir) => Arc::new(FolderRemote::new(dir)?),
+        RemoteSpec::AppData | RemoteSpec::Folder(_) => {
+            let grant = tokens::load(&ctx.paths).ok_or_else(|| {
+                CliError::auth("not signed in; run `bothy auth login` (or `auth login --device`)")
+            })?;
+            if *spec == RemoteSpec::AppData && !grant.has(SCOPE_APPDATA) {
+                return Err(CliError::auth(
+                    "this database uses the hidden app folder (appdata), but the current sign-in cannot reach it.\n\
+                     Google does not allow the drive.appdata scope in device sign-in, so headless machines need a\n\
+                     folder database: create it with `bothy init --remote folder` on a machine with a browser.",
+                ));
+            }
+            if !grant.has(SCOPE_FILE) && matches!(spec, RemoteSpec::Folder(_)) {
+                return Err(CliError::auth(
+                    "the current sign-in lacks drive.file; run `bothy auth login` again",
+                ));
+            }
+            let client = tokens::client(&ctx.paths, &grant.client)?;
+            let provider = Arc::new(tokens::CliTokens::new(client, &grant)?);
+            Arc::new(match spec {
+                RemoteSpec::AppData => DriveRemote::appdata(provider)?,
+                RemoteSpec::Folder(name) => DriveRemote::folder(provider, name)?,
+                RemoteSpec::Path(_) => unreachable!("handled above"),
+            })
+        }
+    })
+}
+
+async fn open_db(ctx: &Ctx, entry: &DbEntry) -> CliResult<Database> {
+    let remote = remote_for(ctx, &entry.remote)?;
+    std::fs::create_dir_all(&ctx.paths.data)
+        .map_err(|e| CliError::io("cannot create data directory", e))?;
+    let mut config = Config::new(ctx.paths.db_file(&ctx.db), &entry.app_id);
+    if let Some(h) = host_name() {
+        config = config.device_name(&h);
+    }
+    Ok(Database::open(config, remote).await?)
+}
+
+async fn open(ctx: &Ctx) -> CliResult<Database> {
+    let config = CliConfig::load(&ctx.paths)?;
+    let entry = entry(ctx, &config)?;
+    open_db(ctx, &entry).await
+}
+
+fn read_doc(arg: &str) -> CliResult<J> {
+    let text = match arg.strip_prefix('@') {
+        Some("-") => {
+            let mut s = String::new();
+            std::io::stdin()
+                .read_to_string(&mut s)
+                .map_err(|e| CliError::io("cannot read stdin", e))?;
+            s
+        }
+        Some(path) => std::fs::read_to_string(path)
+            .map_err(|e| CliError::io(&format!("cannot read {path}"), e))?,
+        None => arg.to_owned(),
+    };
+    let j: J =
+        serde_json::from_str(&text).map_err(|e| CliError::usage(format!("not valid JSON: {e}")))?;
+    if !j.is_object() {
+        return Err(CliError::usage("a document must be a JSON object"));
+    }
+    Ok(j)
+}
+
+fn report_text(r: &SyncReport) -> String {
+    let mut parts = vec![format!(
+        "pushed {} op(s) in {} segment(s); pulled {} op(s) from {} segment(s); {} document(s) changed",
+        r.pushed_ops, r.segments_up, r.pulled_ops, r.segments_down, r.changed_docs
+    )];
+    if r.snapshots_down + r.snapshots_up + r.deleted_files > 0 {
+        parts.push(format!(
+            "snapshots: {} downloaded, {} applied, {} uploaded; {} old file(s) deleted",
+            r.snapshots_down, r.snapshots_applied, r.snapshots_up, r.deleted_files
+        ));
+    }
+    if let Some(id) = r.forked_to {
+        parts.push(format!(
+            "note: another install used this device id; this device is now {id}"
+        ));
+    }
+    for (d, seq) in &r.gaps {
+        parts.push(format!(
+            "warning: segment {seq} of device {d} is missing and no snapshot covers it yet"
+        ));
+    }
+    for s in &r.skipped {
+        parts.push(format!("warning: skipped invalid remote file {s}"));
+    }
+    parts.join("\n")
+}
+
+fn report_json(r: &SyncReport) -> J {
+    json!({
+        "pushed_ops": r.pushed_ops,
+        "segments_up": r.segments_up,
+        "segments_down": r.segments_down,
+        "pulled_ops": r.pulled_ops,
+        "changed_docs": r.changed_docs,
+        "snapshots_down": r.snapshots_down,
+        "snapshots_applied": r.snapshots_applied,
+        "snapshots_up": r.snapshots_up,
+        "deleted_files": r.deleted_files,
+        "gaps": r.gaps.iter().map(|(d, s)| json!({"device": d.to_hex(), "seq": s})).collect::<Vec<_>>(),
+        "forked_to": r.forked_to.map(|d| d.to_hex()),
+        "skipped": r.skipped,
+    })
+}
+
+fn meta_json(state: &DocState, conflicts: &[bothy::store::Conflict]) -> J {
+    let fields: serde_json::Map<String, J> = state
+        .fields
+        .iter()
+        .map(|(name, f)| {
+            let mut m = stamp_json(&f.stamp);
+            m["value"] = f.value.as_ref().map_or(J::Null, Value::to_json);
+            m["unset"] = J::Bool(f.value.is_none());
+            m["visible"] =
+                J::Bool(f.value.is_some() && state.deleted_at.is_none_or(|d| f.stamp > d));
+            (name.to_string(), m)
+        })
+        .collect();
+    let lost: Vec<J> = conflicts
+        .iter()
+        .map(|c| {
+            json!({
+                "field": c.field.to_string(),
+                "winner": stamp_json(&c.winner),
+                "loser": stamp_json(&c.loser),
+                "loser_value": c.loser_value.as_ref().map_or(J::Null, Value::to_json),
+            })
+        })
+        .collect();
+    json!({
+        "deleted_at": state.deleted_at.as_ref().map(stamp_json),
+        "fields": fields,
+        "conflicts": lost,
+    })
+}
+
+async fn find_db(remote: &dyn RemoteStore, app_id: &str) -> CliResult<DbId> {
+    let mut found: Vec<(bothy::Hlc, DbId)> = Vec::new();
+    for e in remote.list("").await? {
+        let Some(k) = LogicalKey::parse(&e.key) else {
+            continue;
+        };
+        if k.kind != KeyKind::Manifest {
+            continue;
+        }
+        if let Some(bytes) = remote.get(&e.key).await?
+            && let Ok(m) = Manifest::from_json(&bytes, Some(k.db_id))
+            && m.app_id == app_id
+        {
+            found.push((m.created_hlc, m.db_id));
+        }
+    }
+    found.sort();
+    match found.as_slice() {
+        [] => Err(CliError::usage(format!(
+            "no database of app {app_id:?} on this remote; use `bothy init`"
+        ))),
+        [(_, only)] => Ok(*only),
+        [(_, oldest), ..] => {
+            eprintln!(
+                "note: {} databases of app {app_id:?} found; joining the oldest ({oldest}). Use --db-id to pick another.",
+                found.len()
+            );
+            Ok(*oldest)
+        }
+    }
+}
+
+fn setup_entry(ctx: &mut Ctx, setup: &Setup) -> CliResult<(CliConfig, DbEntry)> {
+    if let Some(name) = &setup.name {
+        ctx.db = name.clone();
+    }
+    check_db_name(&ctx.db)?;
+    let config = CliConfig::load(&ctx.paths)?;
+    if config.dbs.contains_key(&ctx.db) {
+        return Err(CliError::usage(format!(
+            "local database {:?} already exists; pick another name with --db",
+            ctx.db
+        )));
+    }
+    let entry = DbEntry {
+        remote: RemoteSpec::parse(&setup.remote, &ctx.db)?,
+        app_id: setup.app_id.clone(),
+    };
+    Ok((config, entry))
+}
+
+pub async fn run(mut ctx: Ctx, command: Command) -> CliResult<()> {
+    match command {
+        Command::Auth(a) => auth(&ctx, a).await,
+
+        Command::Init(setup) => {
+            let (mut config, entry) = setup_entry(&mut ctx, &setup)?;
+            let db = open_db(&ctx, &entry).await?;
+            let db_id = db.init().await?;
+            config.dbs.insert(ctx.db.clone(), entry.clone());
+            config.save(&ctx.paths)?;
+            ctx.out(json!({"db": ctx.db, "db_id": db_id.to_hex(), "remote": entry.remote.to_config(), "device_id": db.device_id().to_hex()}), || {
+                format!("created database {db_id} as {:?} on {}\nthis device: {}", ctx.db, entry.remote.to_config(), db.device_id())
+            });
+            Ok(())
+        }
+
+        Command::Join(Join { setup, db_id }) => {
+            let (mut config, entry) = setup_entry(&mut ctx, &setup)?;
+            let db = open_db(&ctx, &entry).await?;
+            let db_id = match db_id {
+                Some(s) => s.parse::<DbId>()?,
+                None => find_db(db.remote().as_ref(), &entry.app_id).await?,
+            };
+            let report = db.join(db_id).await?;
+            config.dbs.insert(ctx.db.clone(), entry.clone());
+            config.save(&ctx.paths)?;
+            ctx.out(json!({"db": ctx.db, "db_id": db_id.to_hex(), "device_id": db.device_id().to_hex(), "report": report_json(&report)}), || {
+                format!("joined database {db_id} as {:?}\nthis device: {}\n{}", ctx.db, db.device_id(), report_text(&report))
+            });
+            Ok(())
+        }
+
+        Command::Put {
+            collection,
+            id,
+            document: arg,
+            patch,
+            unset,
+        } => {
+            let doc = read_doc(&arg)?;
+            let db = open(&ctx).await?;
+            let coll = db.collection(&collection)?;
+            let changed = if patch {
+                let unset: Vec<&str> = unset.iter().map(String::as_str).collect();
+                coll.patch(&id, doc, &unset).await?
+            } else {
+                coll.put(&id, doc).await?
+            };
+            ctx.out(json!({"changed": changed}), || {
+                if changed {
+                    String::new()
+                } else {
+                    "no change".into()
+                }
+            });
+            Ok(())
+        }
+
+        Command::Get {
+            collection,
+            id,
+            with_meta,
+        } => {
+            let db = open(&ctx).await?;
+            let coll = db.collection(&collection)?;
+            let doc = coll.get(&id).await?;
+            if with_meta {
+                let state = coll.get_with_meta(&id).await?;
+                let conflicts = coll.conflicts(&id).await?;
+                let mut out = meta_json(&state, &conflicts);
+                out["doc"] = doc.as_ref().map_or(J::Null, Value::to_json);
+                if ctx.json {
+                    println!("{out}");
+                } else {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&out).expect("JSON values always serialize")
+                    );
+                }
+                return Ok(());
+            }
+            match doc {
+                Some(d) if ctx.json => println!("{}", d.to_json()),
+                Some(d) => println!(
+                    "{}",
+                    serde_json::to_string_pretty(&d.to_json())
+                        .expect("JSON values always serialize")
+                ),
+                None => return Err(CliError::other(format!("{collection}/{id} not found"))),
+            }
+            Ok(())
+        }
+
+        Command::List {
+            collection,
+            limit,
+            after,
+        } => {
+            let db = open(&ctx).await?;
+            let mut opts = ListOptions::default().limit(limit);
+            if let Some(a) = &after {
+                opts = opts.after(a);
+            }
+            let rows = db.collection(&collection)?.list(opts).await?;
+            if ctx.json {
+                let arr: Vec<J> = rows
+                    .iter()
+                    .map(|(id, d)| json!({"id": id.as_str(), "doc": d.to_json()}))
+                    .collect();
+                println!("{}", J::Array(arr));
+            } else {
+                for (id, d) in rows {
+                    println!("{id}\t{}", d.to_json());
+                }
+            }
+            Ok(())
+        }
+
+        Command::Del { collection, id } => {
+            let db = open(&ctx).await?;
+            let deleted = db.collection(&collection)?.delete(&id).await?;
+            ctx.out(json!({"deleted": deleted}), || {
+                if deleted {
+                    String::new()
+                } else {
+                    format!("{collection}/{id} did not exist")
+                }
+            });
+            Ok(())
+        }
+
+        Command::Sync { watch: false } => {
+            let db = open(&ctx).await?;
+            let report = db.sync().await?;
+            ctx.out(report_json(&report), || report_text(&report));
+            Ok(())
+        }
+
+        Command::Sync { watch: true } => {
+            let db = open(&ctx).await?;
+            let mut events = db.subscribe();
+            let handle = db.start_auto_sync(AutoSync::default());
+            let mut status = handle.watch();
+            eprintln!("syncing in the background; press Ctrl-C to stop");
+            loop {
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => break,
+                    Ok(e) = events.recv() => {
+                        if e.origin == Origin::Remote {
+                            ctx.out(json!({"event": "change", "collection": e.collection.as_str(), "id": e.doc_id.as_str()}), || {
+                                format!("changed {}/{}", e.collection, e.doc_id)
+                            });
+                        }
+                    }
+                    Ok(()) = status.changed() => {
+                        match status.borrow().clone() {
+                            bothy::SyncStatus::Failed { kind, message } => eprintln!("sync failed ({kind}): {message}; retrying"),
+                            bothy::SyncStatus::Ok(r) if r.segments_up + r.segments_down > 0 => {
+                                ctx.out(json!({"event": "sync", "report": report_json(&r)}), || report_text(&r));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            handle.stop().await;
+            Ok(())
+        }
+
+        Command::Status => {
+            let config = CliConfig::load(&ctx.paths)?;
+            let entry = entry(&ctx, &config)?;
+            let db = open_db(&ctx, &entry).await?;
+            let st = db.status().await?;
+            let db_id = db.db_id().await?;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_millis() as u64);
+            // A latest HLC ahead of the wall clock means another device's clock runs ahead (or ours behind).
+            let ahead_ms = st.last_hlc.physical_ms().saturating_sub(now);
+            let devices: Vec<J> = st
+                .devices
+                .iter()
+                .map(|d| {
+                    json!({
+                        "device_id": d.device_id.to_hex(),
+                        "name": d.name,
+                        "watermark": d.watermark,
+                        "last_seen": d.last_seen.map(|h| fmt_ms(h.physical_ms())),
+                    })
+                })
+                .collect();
+            ctx.out(
+                json!({
+                    "db": ctx.db,
+                    "db_id": db_id.map(|d| d.to_hex()),
+                    "remote": entry.remote.to_config(),
+                    "device_id": db.device_id().to_hex(),
+                    "documents": st.documents,
+                    "tombstones": st.tombstones,
+                    "unsynced_ops": st.unpacked_ops,
+                    "pending_uploads": st.pending_uploads,
+                    "last_sync": st.last_sync_ms.map(fmt_ms),
+                    "clock_ahead_ms": ahead_ms,
+                    "devices": devices,
+                }),
+                || {
+                    let mut s = format!(
+                        "database {:?}: {} on {}\nthis device: {}\ndocuments: {} ({} deleted kept as tombstones)\nnot yet synced: {} op(s), {} segment(s) waiting for upload\nlast sync: {}",
+                        ctx.db,
+                        db_id.map_or("(not attached)".to_owned(), |d| d.to_hex()),
+                        entry.remote.to_config(),
+                        db.device_id(),
+                        st.documents,
+                        st.tombstones,
+                        st.unpacked_ops,
+                        st.pending_uploads,
+                        st.last_sync_ms.map_or("never".to_owned(), fmt_ms),
+                    );
+                    if ahead_ms > 1000 {
+                        s.push_str(&format!("\nclock: other devices are {} s ahead of this machine", ahead_ms / 1000));
+                    }
+                    for d in &st.devices {
+                        s.push_str(&format!(
+                            "\ndevice {}{}: segments 1..{} applied, last change {}",
+                            d.device_id,
+                            d.name.as_ref().map_or(String::new(), |n| format!(" ({n})")),
+                            d.watermark,
+                            d.last_seen.map_or("-".to_owned(), |h| fmt_ms(h.physical_ms())),
+                        ));
+                    }
+                    s
+                },
+            );
+            Ok(())
+        }
+
+        Command::Devices(Devices::List) => {
+            let db = open(&ctx).await?;
+            let db_id = db
+                .db_id()
+                .await?
+                .ok_or_else(|| CliError::usage("database is not attached"))?;
+            let mut rows = Vec::new();
+            let mut ids: Vec<(DeviceId, bool, Option<String>, u64)> =
+                vec![(db.device_id(), true, None, 0)];
+            for d in db.devices().await? {
+                ids.push((d.device_id, false, d.name, d.watermark));
+            }
+            for (id, me, label, watermark) in ids {
+                let info = match db
+                    .remote()
+                    .get(&LogicalKey::device(db_id, id).to_string())
+                    .await?
+                {
+                    Some(b) => DeviceInfo::from_json(&b, id).ok(),
+                    None => None,
+                };
+                rows.push(json!({
+                    "device_id": id.to_hex(),
+                    "this_device": me,
+                    "label": label,
+                    "name": info.as_ref().and_then(|i| i.name.clone()),
+                    "platform": info.as_ref().and_then(|i| i.platform.clone()),
+                    "watermark": watermark,
+                }));
+            }
+            if ctx.json {
+                println!("{}", J::Array(rows));
+            } else {
+                for r in rows {
+                    let name = r["label"].as_str().or(r["name"].as_str()).unwrap_or("-");
+                    let plat = r["platform"].as_str().unwrap_or("-");
+                    let me = if r["this_device"] == true {
+                        " (this device)"
+                    } else {
+                        ""
+                    };
+                    println!(
+                        "{}  {name}  {plat}{me}",
+                        r["device_id"].as_str().unwrap_or_default()
+                    );
+                }
+            }
+            Ok(())
+        }
+
+        Command::Devices(Devices::Rename { device_id, name }) => {
+            let db = open(&ctx).await?;
+            db.rename_device(device_id.parse()?, &name).await?;
+            Ok(())
+        }
+
+        Command::Devices(Devices::Prune { device_id, yes }) => {
+            if !yes {
+                return Err(CliError::usage(
+                    "pruning deletes files another device wrote; only do it for a device that is gone for good, and add --yes",
+                ));
+            }
+            let db = open(&ctx).await?;
+            let deleted = db.prune_device(device_id.parse()?).await?;
+            ctx.out(json!({"deleted": deleted}), || {
+                format!(
+                    "deleted {} segment(s) after snapshotting them",
+                    deleted.len()
+                )
+            });
+            Ok(())
+        }
+
+        Command::Snapshot(Snapshot::Create) => {
+            let db = open(&ctx).await?;
+            let key = db.snapshot().await?;
+            ctx.out(json!({"key": key}), || format!("uploaded {key}"));
+            Ok(())
+        }
+
+        Command::Compact { dry_run } => {
+            let db = open(&ctx).await?;
+            let r = db.compact(dry_run).await?;
+            let verb = if dry_run { "would delete" } else { "deleted" };
+            ctx.out(
+                json!({"dry_run": dry_run, "segments": r.segments, "snapshots": r.snapshots}),
+                || {
+                    format!(
+                        "{verb} {} segment(s) and {} snapshot(s)",
+                        r.segments.len(),
+                        r.snapshots.len()
+                    )
+                },
+            );
+            Ok(())
+        }
+
+        Command::Inspect(Inspect::Remote) => {
+            let db = open(&ctx).await?;
+            let db_id = db
+                .db_id()
+                .await?
+                .ok_or_else(|| CliError::usage("database is not attached"))?;
+            let files = db.remote().list(&format!("{db_id}/")).await?;
+            let mut kinds: BTreeMap<&str, (usize, u64)> = BTreeMap::new();
+            let mut rows = Vec::new();
+            for f in &files {
+                let kind = match LogicalKey::parse(&f.key).map(|k| k.kind) {
+                    Some(KeyKind::Manifest) => "manifest",
+                    Some(KeyKind::Device(_)) => "device",
+                    Some(KeyKind::Segment(..)) => "segment",
+                    Some(KeyKind::Snapshot(..)) => "snapshot",
+                    None => "unknown",
+                };
+                let k = kinds.entry(kind).or_default();
+                k.0 += 1;
+                k.1 += f.size;
+                rows.push(json!({"key": f.key, "size": f.size, "kind": kind}));
+            }
+            if ctx.json {
+                println!("{}", J::Array(rows));
+            } else {
+                for f in &files {
+                    println!("{:>10}  {}", f.size, f.key);
+                }
+                for (kind, (n, bytes)) in kinds {
+                    println!("{n} {kind} file(s), {bytes} bytes");
+                }
+            }
+            Ok(())
+        }
+
+        Command::Export { collection, all } => {
+            let db = open(&ctx).await?;
+            let names = match (collection, all) {
+                (Some(c), _) => vec![bothy::CollectionName::new(&c)?],
+                (None, true) => db.collections().await?,
+                (None, false) => return Err(CliError::usage("give a collection or --all")),
+            };
+            for name in names {
+                let coll = db.collection(name.as_str())?;
+                let mut after: Option<String> = None;
+                loop {
+                    let mut opts = ListOptions::default().limit(1000);
+                    if let Some(a) = &after {
+                        opts = opts.after(a);
+                    }
+                    let rows = coll.list(opts).await?;
+                    let Some((last, _)) = rows.last() else { break };
+                    after = Some(last.to_string());
+                    for (id, d) in &rows {
+                        println!(
+                            "{}",
+                            json!({"collection": name.as_str(), "id": id.as_str(), "doc": d.to_json()})
+                        );
+                    }
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+async fn auth(ctx: &Ctx, a: Auth) -> CliResult<()> {
+    match a {
+        Auth::Setup {
+            client,
+            device_client,
+        } => {
+            if client.is_none() && device_client.is_none() {
+                return Err(CliError::usage(
+                    "give --client <file> and/or --device-client <file>",
+                ));
+            }
+            for (kind, file) in [("desktop", client), ("device", device_client)] {
+                let Some(file) = file else { continue };
+                let bytes = std::fs::read(&file)
+                    .map_err(|e| CliError::io(&format!("cannot read {file}"), e))?;
+                let c = oauth::Client::from_json(&bytes)?;
+                write_private(&ctx.paths.client_file(kind), &bytes)?;
+                ctx.out(json!({"client": kind, "client_id": c.id}), || {
+                    format!("stored the {kind} client {}", c.id)
+                });
+            }
+            Ok(())
+        }
+        Auth::Login { device } => {
+            let grant = if device {
+                let client = tokens::client(&ctx.paths, "device")?;
+                oauth::device_login(&client).await?
+            } else {
+                let client = tokens::client(&ctx.paths, "desktop")?;
+                oauth::loopback_login(&client, &[SCOPE_APPDATA, SCOPE_FILE]).await?
+            };
+            let place = tokens::save(&ctx.paths, &grant)?;
+            let mut text = format!("signed in; the sign-in is stored in {place}");
+            if !grant.has(SCOPE_APPDATA) {
+                text.push_str(
+                    "\nnote: this sign-in reaches folder databases only (no drive.appdata)",
+                );
+            }
+            ctx.out(
+                json!({"signed_in": true, "client": grant.client, "scopes": grant.scopes}),
+                || text,
+            );
+            Ok(())
+        }
+        Auth::Logout => {
+            if let Some(g) = tokens::load(&ctx.paths)
+                && let Err(e) = oauth::revoke(&g.refresh_token).await
+            {
+                eprintln!("warning: {e}; forgetting the local sign-in anyway");
+            }
+            tokens::clear(&ctx.paths);
+            ctx.out(json!({"signed_in": false}), || "signed out".into());
+            Ok(())
+        }
+        Auth::Status => {
+            let grant = tokens::load(&ctx.paths);
+            let clients: Vec<&str> = ["desktop", "device"]
+                .into_iter()
+                .filter(|k| ctx.paths.client_file(k).exists())
+                .collect();
+            ctx.out(
+                json!({
+                    "signed_in": grant.is_some(),
+                    "client": grant.as_ref().map(|g| g.client.clone()),
+                    "scopes": grant.as_ref().map(|g| g.scopes.clone()),
+                    "clients_configured": clients,
+                }),
+                || match &grant {
+                    Some(g) => format!(
+                        "signed in with the {} client; appdata: {}, folder: {}",
+                        g.client,
+                        if g.has(SCOPE_APPDATA) { "yes" } else { "no" },
+                        if g.has(SCOPE_FILE) { "yes" } else { "no" }
+                    ),
+                    None => format!(
+                        "not signed in; clients configured: {}",
+                        if clients.is_empty() {
+                            "none".to_owned()
+                        } else {
+                            clients.join(", ")
+                        }
+                    ),
+                },
+            );
+            Ok(())
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn utc_formatting() {
+        assert_eq!(fmt_ms(0), "1970-01-01 00:00:00 UTC");
+        assert_eq!(fmt_ms(1_700_000_000_000), "2023-11-14 22:13:20 UTC");
+        assert_eq!(fmt_ms(951_782_400_000), "2000-02-29 00:00:00 UTC");
+    }
+}
