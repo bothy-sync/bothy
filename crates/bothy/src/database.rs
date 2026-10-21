@@ -45,6 +45,7 @@ pub struct Config {
     pub(crate) policy: SnapshotPolicy,
     pub(crate) device_name: Option<String>,
     pub(crate) id_seed: Option<u64>,
+    pub(crate) conflict_log: Option<u32>,
     #[cfg(feature = "crypto")]
     pub(crate) secret: Option<Secret>,
     #[cfg(feature = "crypto")]
@@ -82,6 +83,7 @@ impl Config {
             policy: SnapshotPolicy::default(),
             device_name: None,
             id_seed: None,
+            conflict_log: Some(crate::store::DEFAULT_CONFLICT_LOG_LIMIT),
             #[cfg(feature = "crypto")]
             secret: None,
             #[cfg(feature = "crypto")]
@@ -154,6 +156,12 @@ impl Config {
     /// Human-readable device name written to `device.json`.
     pub fn device_name(mut self, name: &str) -> Self {
         self.device_name = Some(name.to_owned());
+        self
+    }
+
+    /// How many conflict records to keep (default 1,000); `None` turns the conflict log off.
+    pub fn conflict_log(mut self, limit: Option<u32>) -> Self {
+        self.conflict_log = limit;
         self
     }
 }
@@ -322,6 +330,7 @@ impl Database {
             policy,
             device_name,
             id_seed,
+            conflict_log,
             #[cfg(feature = "crypto")]
             secret,
             #[cfg(feature = "crypto")]
@@ -329,9 +338,14 @@ impl Database {
             #[cfg(feature = "crypto")]
             kdf_cost,
         } = config;
-        let store = tokio::task::spawn_blocking(move || Store::open_with(path, clock, id_seed))
-            .await
-            .map_err(|e| Error::new(ErrorKind::Internal, "open task failed").with_source(e))??;
+        let store = tokio::task::spawn_blocking(move || {
+            Store::open_with(path, clock, id_seed).map(|mut s| {
+                s.set_conflict_log(conflict_log);
+                s
+            })
+        })
+        .await
+        .map_err(|e| Error::new(ErrorKind::Internal, "open task failed").with_source(e))??;
         let (events, _) = broadcast::channel(1024);
         let db = Database {
             inner: Arc::new(Inner {
@@ -433,6 +447,19 @@ impl Database {
     /// Local counters: documents, tombstones, unsent ops, last sync and known devices.
     pub async fn status(&self) -> Result<LocalStatus> {
         self.inner.store(|s| s.status()).await
+    }
+
+    /// Writes from other devices that lost to another write, across the database, newest
+    /// first. With `since_ms` (ms since the epoch, local clock), only those recorded since then.
+    pub async fn conflicts(&self, since_ms: Option<u64>) -> Result<Vec<Conflict>> {
+        self.inner
+            .store(move |s| s.recent_conflicts(since_ms))
+            .await
+    }
+
+    /// Deletes every conflict record. Returns how many there were.
+    pub async fn clear_conflicts(&self) -> Result<usize> {
+        self.inner.store(|s| s.clear_conflicts()).await
     }
 
     /// Other devices this database has seen.

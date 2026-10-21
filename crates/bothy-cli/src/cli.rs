@@ -85,6 +85,16 @@ pub enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Writes from other devices that lost to another write, newest first.
+    Conflicts {
+        /// Only those recorded since: a duration back from now (30m, 2h, 7d) or a UTC date or
+        /// time (2026-10-21, 2026-10-21T14:30).
+        #[arg(long)]
+        since: Option<String>,
+        /// Delete every conflict record.
+        #[arg(long, conflicts_with = "since")]
+        clear: bool,
+    },
     /// Debugging views.
     #[command(subcommand)]
     Inspect(Inspect),

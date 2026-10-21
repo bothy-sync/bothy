@@ -28,15 +28,22 @@ pub use snapshots::SinceSnapshot;
 pub use status::{DeviceStatus, LocalStatus};
 pub use sync_state::{PackLimits, Packed, PendingUpload};
 
-/// Most recent conflict records kept per database.
-const CONFLICT_LOG_LIMIT: i64 = 1_000;
+/// Most recent conflict records kept per database, by default.
+pub const DEFAULT_CONFLICT_LOG_LIMIT: u32 = 1_000;
 
 /// Fields of a visible document.
 pub type Document = BTreeMap<FieldName, Value>;
 
 /// A write that lost to a write from another device.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Conflict {
+    /// The document's collection.
+    pub collection: CollectionName,
+    /// The document.
+    pub doc_id: DocId,
+    /// When this device recorded it (local wall clock, ms since the epoch).
+    pub at_ms: u64,
     /// The field.
     pub field: FieldName,
     /// Stamp of the winning write.
@@ -86,6 +93,8 @@ pub struct Store {
     hlc: HlcClock,
     clock: Arc<dyn Clock>,
     id_seed: Option<u64>,
+    /// `None`: conflicts are not logged.
+    conflict_limit: Option<u32>,
 }
 
 /// A 16-byte id derived from a test seed.
@@ -177,6 +186,7 @@ impl Store {
             hlc,
             clock,
             id_seed,
+            conflict_limit: Some(DEFAULT_CONFLICT_LOG_LIMIT),
         })
     }
 
@@ -322,28 +332,66 @@ impl Store {
         load_doc(&self.conn, collection, id)
     }
 
+    /// Sets how many conflict records are kept; `None` stops logging (existing records stay
+    /// until [`Store::clear_conflicts`]).
+    pub fn set_conflict_log(&mut self, limit: Option<u32>) {
+        self.conflict_limit = limit;
+    }
+
     /// Recorded conflicts for a document, newest first.
     pub fn conflicts(&self, collection: &CollectionName, id: &DocId) -> Result<Vec<Conflict>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT field, winner_hlc, winner_device, loser_hlc, loser_device, loser_value
-             FROM conflict_log WHERE collection = ?1 AND doc_id = ?2 ORDER BY id DESC",
-        )?;
-        let rows = stmt.query_map(params![collection.as_str(), id.as_str()], |r| {
+        self.query_conflicts(
+            "WHERE collection = ?1 AND doc_id = ?2",
+            params![collection.as_str(), id.as_str()],
+        )
+    }
+
+    /// Recorded conflicts across the database, newest first; with `since_ms`, only those
+    /// recorded at or after that time.
+    pub fn recent_conflicts(&self, since_ms: Option<u64>) -> Result<Vec<Conflict>> {
+        let since = since_ms.unwrap_or(0).min(i64::MAX as u64) as i64;
+        self.query_conflicts("WHERE at >= ?1", params![since])
+    }
+
+    /// Deletes every conflict record. Returns how many there were.
+    pub fn clear_conflicts(&mut self) -> Result<usize> {
+        Ok(self.conn.execute("DELETE FROM conflict_log", [])?)
+    }
+
+    fn query_conflicts(
+        &self,
+        filter: &str,
+        args: &[&dyn rusqlite::ToSql],
+    ) -> Result<Vec<Conflict>> {
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT collection, doc_id, at, field, winner_hlc, winner_device, loser_hlc,
+               loser_device, loser_value
+             FROM conflict_log {filter} ORDER BY id DESC"
+        ))?;
+        let rows = stmt.query_map(args, |r| {
             Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, i64>(1)?,
-                r.get::<_, Vec<u8>>(2)?,
-                r.get::<_, i64>(3)?,
-                r.get::<_, Vec<u8>>(4)?,
-                r.get::<_, Option<Vec<u8>>>(5)?,
+                (
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, i64>(2)?,
+                ),
+                r.get::<_, String>(3)?,
+                r.get::<_, i64>(4)?,
+                r.get::<_, Vec<u8>>(5)?,
+                r.get::<_, i64>(6)?,
+                r.get::<_, Vec<u8>>(7)?,
+                r.get::<_, Option<Vec<u8>>>(8)?,
             ))
         })?;
         let mut out = Vec::new();
         for row in rows {
-            let (field, wh, wd, lh, ld, lv) = row?;
+            let ((c, d, at), field, wh, wd, lh, ld, lv) = row?;
+            let bad = |what| move |_| Error::corrupt(format!("bad stored {what}"));
             out.push(Conflict {
-                field: FieldName::new(&field)
-                    .map_err(|_| Error::corrupt("bad stored field name"))?,
+                collection: CollectionName::new(&c).map_err(bad("collection name"))?,
+                doc_id: DocId::new(&d).map_err(bad("document id"))?,
+                at_ms: at.max(0) as u64,
+                field: FieldName::new(&field).map_err(bad("field name"))?,
                 winner: Stamp::new(hlc_from_sql(wh), device_from_sql(wd)?),
                 loser: Stamp::new(hlc_from_sql(lh), device_from_sql(ld)?),
                 loser_value: lv.map(|b| decode_value(&b)).transpose()?,
@@ -430,6 +478,7 @@ impl Store {
         }
 
         let wall = self.clock.now_ms();
+        let log_limit = self.conflict_limit;
         let mut docs: BTreeMap<(CollectionName, DocId), (DocState, DocState)> = BTreeMap::new();
         let mut max_hlc = Hlc::ZERO;
         for op in ops {
@@ -441,7 +490,7 @@ impl Store {
             }
             let (_, after) = docs.get_mut(&key).expect("inserted above");
             let lost = after.apply(&op.kind, op.stamp(device));
-            log_conflicts(&tx, &key.0, &key.1, &lost, wall)?;
+            log_conflicts(&tx, &key.0, &key.1, &lost, wall, log_limit)?;
         }
 
         let mut changed = Vec::new();
@@ -457,10 +506,7 @@ impl Store {
             params![device.as_bytes().as_slice(), seq_sql],
         )?;
         advance_watermark(&tx, device, max_hlc)?;
-        tx.execute(
-            "DELETE FROM conflict_log WHERE id <= (SELECT MAX(id) FROM conflict_log) - ?1",
-            [CONFLICT_LOG_LIMIT],
-        )?;
+        trim_conflicts(&tx, log_limit)?;
         if max_hlc > Hlc::ZERO {
             self.hlc.observe(max_hlc, wall);
         }
@@ -660,7 +706,11 @@ fn log_conflicts(
     id: &DocId,
     lost: &[Superseded],
     wall: u64,
+    limit: Option<u32>,
 ) -> Result<()> {
+    if limit.is_none_or(|l| l == 0) {
+        return Ok(());
+    }
     for s in lost
         .iter()
         .filter(|s| s.winner.device != s.loser.stamp.device)
@@ -681,6 +731,17 @@ fn log_conflicts(
                 value,
                 wall.min(i64::MAX as u64) as i64
             ],
+        )?;
+    }
+    Ok(())
+}
+
+/// Keeps only the newest `limit` conflict records.
+fn trim_conflicts(tx: &Transaction<'_>, limit: Option<u32>) -> Result<()> {
+    if let Some(limit) = limit {
+        tx.execute(
+            "DELETE FROM conflict_log WHERE id <= (SELECT MAX(id) FROM conflict_log) - ?1",
+            [i64::from(limit)],
         )?;
     }
     Ok(())

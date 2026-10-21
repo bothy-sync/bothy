@@ -83,6 +83,7 @@ bothy status
 bothy devices list | rename <id> <name> | prune <id> --yes
 bothy snapshot create
 bothy compact [--dry-run]
+bothy conflicts [--since 2h|2026-10-21] | --clear
 bothy inspect remote
 bothy export <collection> | --all
 ```

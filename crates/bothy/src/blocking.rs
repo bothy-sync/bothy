@@ -140,6 +140,16 @@ impl Database {
         self.run(self.db.status())
     }
 
+    /// See [`crate::Database::conflicts`].
+    pub fn conflicts(&self, since_ms: Option<u64>) -> Result<Vec<Conflict>> {
+        self.run(self.db.conflicts(since_ms))
+    }
+
+    /// See [`crate::Database::clear_conflicts`].
+    pub fn clear_conflicts(&self) -> Result<usize> {
+        self.run(self.db.clear_conflicts())
+    }
+
     /// See [`crate::Database::devices`].
     pub fn devices(&self) -> Result<Vec<DeviceStatus>> {
         self.run(self.db.devices())

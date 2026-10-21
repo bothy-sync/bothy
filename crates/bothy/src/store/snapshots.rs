@@ -6,7 +6,7 @@ use rusqlite::{OptionalExtension, TransactionBehavior, params};
 
 use super::{
     Store, advance_watermark, device_from_sql, get_meta, hlc_from_sql, hlc_to_sql, load_doc,
-    log_conflicts, save_doc, set_meta, visible_doc,
+    log_conflicts, save_doc, set_meta, trim_conflicts, visible_doc,
 };
 use crate::Hlc;
 use crate::codec::DataKey;
@@ -260,6 +260,7 @@ impl Store {
         }
         let me = self.device;
         let wall = self.clock.now_ms();
+        let log_limit = self.conflict_limit;
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -272,7 +273,7 @@ impl Store {
             let before = load_doc(&tx, &c, &d)?;
             let mut after = before.clone();
             let lost = after.merge(&incoming);
-            log_conflicts(&tx, &c, &d, &lost, wall)?;
+            log_conflicts(&tx, &c, &d, &lost, wall, log_limit)?;
             if visible_doc(&before) != visible_doc(&after) {
                 changed.push((c.clone(), d.clone()));
             }
@@ -290,6 +291,7 @@ impl Store {
             advance_watermark(&tx, *device, Hlc::ZERO)?;
         }
         tx.execute("INSERT INTO applied_snapshots (key) VALUES (?1)", [key])?;
+        trim_conflicts(&tx, log_limit)?;
         if max_hlc > Hlc::ZERO {
             self.hlc.observe(max_hlc, wall);
         }

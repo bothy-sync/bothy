@@ -339,3 +339,47 @@ fn json_view_tracks_visible_documents() {
         .unwrap();
     assert_eq!(rows, 0);
 }
+
+#[test]
+fn conflict_log_spans_documents_and_honours_its_limit() {
+    let dir = tempfile::tempdir().unwrap();
+    let clock = FakeClock::new();
+    let mut a = open(&dir, "a.db", clock.clone());
+    let mut b = open(&dir, "b.db", clock.clone());
+    let mut c = open(&dir, "c.db", clock.clone());
+    for i in 0..5 {
+        a.put(&coll(), &id(&format!("n{i}")), doc(&[("t", "A".into())]))
+            .unwrap();
+    }
+    clock.advance(10);
+    for s in [&mut b, &mut c] {
+        for i in 0..5 {
+            s.put(
+                &coll(),
+                &id(&format!("n{i}")),
+                doc(&[("t", "later".into())]),
+            )
+            .unwrap();
+        }
+    }
+    b.set_conflict_log(Some(3));
+    c.set_conflict_log(None);
+    let start = clock.now_ms();
+    ship(&a, &mut b, 1).unwrap();
+    ship(&a, &mut c, 1).unwrap();
+
+    let all = b.recent_conflicts(None).unwrap();
+    let ids: Vec<_> = all.iter().map(|x| x.doc_id.as_str()).collect();
+    assert_eq!(ids, ["n4", "n3", "n2"], "newest first, oldest trimmed");
+    assert!(
+        all.iter()
+            .all(|x| x.collection == coll() && x.at_ms == start)
+    );
+    assert_eq!(all[0].loser_value, Some("A".into()));
+    assert_eq!(b.recent_conflicts(Some(start)).unwrap().len(), 3);
+    assert!(b.recent_conflicts(Some(start + 1)).unwrap().is_empty());
+    assert!(c.recent_conflicts(None).unwrap().is_empty(), "logging off");
+
+    assert_eq!(b.clear_conflicts().unwrap(), 3);
+    assert!(b.recent_conflicts(None).unwrap().is_empty());
+}

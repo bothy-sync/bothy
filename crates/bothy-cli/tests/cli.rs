@@ -97,6 +97,23 @@ fn offline_edits_merge_and_the_loser_shows_in_meta() {
     let meta = a.json(&["get", "notes", "n2", "--with-meta"]);
     assert_eq!(meta["conflicts"][0]["loser_value"], "first");
     assert_eq!(meta["fields"]["v"]["visible"], true);
+
+    let all = a.json(&["conflicts"]);
+    assert!(
+        all.as_array()
+            .unwrap()
+            .iter()
+            .any(|c| c["id"] == "n2" && c["loser_value"] == "first"),
+        "{all}"
+    );
+    assert_eq!(a.json(&["conflicts", "--since", "1h"]), all);
+    assert_eq!(
+        a.json(&["conflicts", "--since", "2999-01-01"]),
+        serde_json::json!([])
+    );
+    let cleared = a.json(&["conflicts", "--clear"]);
+    assert_eq!(cleared["cleared"], all.as_array().unwrap().len());
+    assert_eq!(a.json(&["conflicts"]), serde_json::json!([]));
 }
 
 #[test]

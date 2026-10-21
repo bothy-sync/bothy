@@ -20,6 +20,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - Password change re-wraps the data key; the old password stops working on every device and
   `SyncReport::password_changed` reports it. Cached data keys keep working.
 - `ErrorKind::KeyRequired` for syncing a locked database.
+- Conflict log across the database: `Database::conflicts(since_ms)` and `clear_conflicts()`,
+  `Config::conflict_log(limit)` (default 1,000 records, `None` turns logging off), and the
+  CLI command `bothy conflicts [--since <duration|date>] [--clear]`. `Conflict` now carries
+  the collection, document id and the time it was recorded, and is `#[non_exhaustive]`.
 - Conformance vectors for the crypto primitives and encrypted segments and snapshots; a fuzz
   target for key files and sealed JSON; encrypted seeds in the simulation.
 

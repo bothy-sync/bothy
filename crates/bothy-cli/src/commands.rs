@@ -62,6 +62,67 @@ pub fn fmt_ms(ms: u64) -> String {
     )
 }
 
+/// `--since`: a duration back from `now_ms` (`90s`, `30m`, `2h`, `7d`) or a UTC date or time
+/// (`2026-10-21`, `2026-10-21T14:30`, `2026-10-21 14:30:05`), as milliseconds since the epoch.
+pub fn parse_since(s: &str, now_ms: u64) -> CliResult<u64> {
+    let bad = || {
+        CliError::usage(format!(
+            "--since: expected a duration like 2h or a UTC date like 2026-10-21, got {s:?}"
+        ))
+    };
+    let s = s.trim();
+    if !s.contains('-') {
+        let (n, unit) = s.split_at(s.len().saturating_sub(1));
+        let n: u64 = n.parse().map_err(|_| bad())?;
+        let unit_ms = match unit {
+            "s" => 1_000,
+            "m" => 60_000,
+            "h" => 3_600_000,
+            "d" => 86_400_000,
+            _ => return Err(bad()),
+        };
+        return Ok(now_ms.saturating_sub(n.saturating_mul(unit_ms)));
+    }
+    let s = s.strip_suffix('Z').unwrap_or(s);
+    let (date, time) = s.split_once(['T', ' ']).unwrap_or((s, "00:00"));
+    let num = |p: Option<&str>, lo: i64, hi: i64| {
+        p.and_then(|p| p.parse::<i64>().ok())
+            .filter(|v| (lo..=hi).contains(v))
+            .ok_or_else(bad)
+    };
+    let mut d = date.split('-');
+    let (y, m, day) = (
+        num(d.next(), 1970, 9999)?,
+        num(d.next(), 1, 12)?,
+        num(d.next(), 1, 31)?,
+    );
+    let mut t = time.split(':');
+    let (hh, mm) = (num(t.next(), 0, 23)?, num(t.next(), 0, 59)?);
+    let ss = t.next().map_or(Ok(0), |v| num(Some(v), 0, 59))?;
+    if d.next().is_some() || t.next().is_some() {
+        return Err(bad());
+    }
+    // Days since 1970-01-01 from a civil date (Howard Hinnant's algorithm).
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * ((m + 9) % 12) + 2) / 5 + day - 1;
+    let days = era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468;
+    Ok(((days * 86_400 + hh * 3600 + mm * 60 + ss) * 1000) as u64)
+}
+
+fn conflict_json(c: &bothy::store::Conflict) -> J {
+    json!({
+        "time": fmt_ms(c.at_ms),
+        "collection": c.collection.as_str(),
+        "id": c.doc_id.as_str(),
+        "field": c.field.to_string(),
+        "winner": stamp_json(&c.winner),
+        "loser": stamp_json(&c.loser),
+        "loser_value": c.loser_value.as_ref().map_or(J::Null, Value::to_json),
+    })
+}
+
 fn stamp_json(s: &Stamp) -> J {
     json!({"hlc": s.hlc.to_hex(), "device": s.device.to_hex(), "time": fmt_ms(s.hlc.physical_ms())})
 }
@@ -612,6 +673,53 @@ pub async fn run(mut ctx: Ctx, command: Command) -> CliResult<()> {
             Ok(())
         }
 
+        Command::Conflicts {
+            since: _,
+            clear: true,
+        } => {
+            let db = open(&ctx).await?;
+            let n = db.clear_conflicts().await?;
+            ctx.out(json!({"cleared": n}), || {
+                format!("cleared {n} conflict record(s)")
+            });
+            Ok(())
+        }
+
+        Command::Conflicts {
+            since,
+            clear: false,
+        } => {
+            let db = open(&ctx).await?;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_millis() as u64);
+            let since = since.map(|s| parse_since(&s, now)).transpose()?;
+            let rows = db.conflicts(since).await?;
+            if ctx.json {
+                println!("{}", J::Array(rows.iter().map(conflict_json).collect()));
+            } else if rows.is_empty() {
+                println!("no conflicts");
+            } else {
+                for c in &rows {
+                    let lost = c
+                        .loser_value
+                        .as_ref()
+                        .map_or("(unset)".to_owned(), |v| v.to_json().to_string());
+                    println!(
+                        "{}\t{}/{}\t{}\tlost {} (device {}) to device {}",
+                        fmt_ms(c.at_ms),
+                        c.collection,
+                        c.doc_id,
+                        c.field,
+                        lost,
+                        &c.loser.device.to_hex()[..8],
+                        &c.winner.device.to_hex()[..8],
+                    );
+                }
+            }
+            Ok(())
+        }
+
         Command::Inspect(Inspect::Remote) => {
             let db = open(&ctx).await?;
             let db_id = db
@@ -777,5 +885,28 @@ mod tests {
         assert_eq!(fmt_ms(0), "1970-01-01 00:00:00 UTC");
         assert_eq!(fmt_ms(1_700_000_000_000), "2023-11-14 22:13:20 UTC");
         assert_eq!(fmt_ms(951_782_400_000), "2000-02-29 00:00:00 UTC");
+    }
+
+    #[test]
+    fn since_accepts_durations_and_utc_dates() {
+        let now = 1_700_000_000_000;
+        assert_eq!(parse_since("90s", now).unwrap(), now - 90_000);
+        assert_eq!(parse_since("2h", now).unwrap(), now - 7_200_000);
+        assert_eq!(parse_since("7d", now).unwrap(), now - 7 * 86_400_000);
+        assert_eq!(parse_since("2023-11-14 22:13:20", 0).unwrap(), now);
+        assert_eq!(parse_since("2023-11-14T22:13:20Z", 0).unwrap(), now);
+        assert_eq!(parse_since("2000-02-29", 0).unwrap(), 951_782_400_000);
+        assert_eq!(parse_since("1970-01-01T00:01", 0).unwrap(), 60_000);
+        for bad in [
+            "",
+            "h",
+            "5y",
+            "2023-13-01",
+            "2023-11-14T25:00",
+            "2023-11-14T10:00:00:00",
+            "x-y",
+        ] {
+            assert!(parse_since(bad, now).is_err(), "{bad:?}");
+        }
     }
 }
