@@ -30,6 +30,11 @@ devices drop off and pick up files at a shared place.
 | PyPI | [`bothy`](https://pypi.org/project/bothy/) | [`bindings/python`](bindings/python) |
 | npm | [`@bothy-sync/core`](https://www.npmjs.com/package/@bothy-sync/core) | [`bindings/js`](bindings/js) |
 
+## Minimum supported Rust version
+
+The Rust crates build with Rust **1.88** or newer. Raising the MSRV is not a breaking change
+before 1.0, but it is always noted in the changelog.
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
