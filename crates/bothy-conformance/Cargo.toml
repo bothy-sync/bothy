@@ -10,6 +10,7 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+base64 = "0.23"
 bothy.workspace = true
 blake3 = "1.8"
 serde_json = { version = "1", features = ["float_roundtrip"] }

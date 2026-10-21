@@ -30,8 +30,9 @@ JSON can't tell `1` from `1.0` or represent bytes, so values use a tagged form:
 - **Stamps:** `{"hlc": "<16 hex>", "device": "<32 hex>"}`.
 - **State entries:** `{"collection", "doc_id", "deleted_at": stamp | null, "fields": [{"name", "stamp", "value"?}]}`. A field without `value` is unset.
 
-Binary data (`cbor`, `bytes`, `dump`) is lowercase hex. Expected errors are `"corrupt"` or
-`"format_too_new"`.
+Binary data (`cbor`, `bytes`, `dump`) is lowercase hex. Expected errors are `"corrupt"`,
+`"format_too_new"`, `"key_required"` (an encrypted file read without the data key) or
+`"wrong_password"`.
 
 ## Files
 
@@ -45,8 +46,9 @@ Binary data (`cbor`, `bytes`, `dump`) is lowercase hex. Expected errors are `"co
 | `segment/*.json` | Decoding `bytes`, with the expected `db_id`, `device_id` and `seq`, gives `ops`. If `compressed` is false, encoding `ops` must give `bytes` exactly. `invalid.json`: decoding fails with `error` |
 | `snapshot/*.json` | Reading `bytes` with the expected `header` gives `entries` and the version vector. If `compressed` is false, writing the entries with chunks of about `chunk_target` plain bytes must give `bytes`. `invalid.json`: reading fails with `error` |
 
-zstd output differs between libraries and versions. For compressed files, only decoding is
-normative.
+| `crypto.json` | Argon2id (v0x13, 32-byte output): each `kdf` case gives `kek`. `key_check` verifies under `dek` with `aad` = db id bytes. The key file unwraps to `dek` with its password (`aad` = `"bothy-dek-v1"` ‖ db id ‖ key file key) and gives a wrong-password error for `wrong_password`. `sealed_json` opens to `plaintext` with `aad` = its key |
+| `encrypted/segment.json` | XChaCha20-Poly1305 segments (`aad` = 96-byte header): decoding with `key` gives `ops`; uncompressed ones re-encode exactly with the given `nonce`. `invalid` cases fail with `error` |
+| `encrypted/snapshot.json` | An encrypted snapshot (`aad` = header ‖ u32 BE chunk index) with fixed chunk `nonces`: reading gives `entries`, writing gives `bytes` |
 
-Encryption vectors (`crypto.json` and encrypted segments and snapshots) will be added together
-with encryption support.
+zstd output differs between libraries and versions. For compressed files, only decoding is
+normative. Sealed values are `nonce ‖ ciphertext ‖ tag`.

@@ -19,6 +19,8 @@ fn kind_name(k: ErrorKind) -> &'static str {
     match k {
         ErrorKind::Corrupt => "corrupt",
         ErrorKind::FormatTooNew => "format_too_new",
+        ErrorKind::KeyRequired => "key_required",
+        ErrorKind::WrongPassword => "wrong_password",
         _ => "other",
     }
 }
@@ -329,5 +331,6 @@ pub fn check_dir(dir: &Path) -> Res<usize> {
             total += check(&read(&path)?).map_err(|e| format!("{}: {e}", path.display()))?;
         }
     }
+    total += crate::crypto_vectors::check(dir)?;
     Ok(total)
 }

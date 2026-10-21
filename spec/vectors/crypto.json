@@ -1,0 +1,54 @@
+{
+  "about": "Argon2id (v0x13, 32-byte output) and XChaCha20-Poly1305. Sealed values are nonce || ciphertext || tag.",
+  "db_id": "000102030405060708090a0b0c0d0e0f",
+  "dek": "4242424242424242424242424242424242424242424242424242424242424242",
+  "kdf": [
+    {
+      "kek": "667583c3e341405c650e648948720276491a2e428ef63a5eaf33cd66c7a7fb0f",
+      "m_kib": 64,
+      "p": 1,
+      "password": "correct horse battery staple",
+      "salt": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "t": 1
+    },
+    {
+      "kek": "b5d354876f658cde1a5d125c43b4a60465890d322a2394066a3428b0d1fa231a",
+      "m_kib": 65536,
+      "p": 1,
+      "password": "correct horse battery staple",
+      "salt": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+      "t": 3
+    }
+  ],
+  "key_check": {
+    "aad": "db_id bytes",
+    "nonce": "020202020202020202020202020202020202020202020202",
+    "value": "020202020202020202020202020202020202020202020202eed3356c75f2524a638ca3bd5a43a98864d5dc2e460588f275d2727ec9470f1ecf27"
+  },
+  "key_file": {
+    "aad": "\"bothy-dek-v1\" || db_id bytes || key (UTF-8)",
+    "json": {
+      "kdf": {
+        "alg": "argon2id",
+        "m_kib": 64,
+        "p": 1,
+        "salt": "WlpaWlpaWlpaWlpaWlpaWg==",
+        "t": 1
+      },
+      "wrapped_dek": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBGHY4sPGTBNMBnFIi2GNQh0gOZRpdLkoTxyThrP/H16/pFY4s46IZVvSt8m3oFzc4"
+    },
+    "key": "000102030405060708090a0b0c0d0e0f/keys/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1/key-018bcfe568000000.json",
+    "password": "correct horse battery staple",
+    "wrapped_dek": "010101010101010101010101010101010101010101010101187638b0f19304d3019c5222d8635087480e651a5d2e4a13c724e1acffc7d7afe9158e2ce3a21956f4adf26de8173738"
+  },
+  "sealed_json": {
+    "key": "000102030405060708090a0b0c0d0e0f/devices/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1/device.json",
+    "plaintext": "{\"device_id\":\"a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1\"}",
+    "sealed": {
+      "ct": "DuSP7izIqOmJ01S3cVIdi9kqFqGtzEDZz7YoJNccxPpAvHd3aWweIsnmwcyNLTI2jupaQYv0Qwa4JhrXpcigUg==",
+      "nonce": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD",
+      "sealed": "xchacha20poly1305"
+    }
+  },
+  "wrong_password": "Tr0ub4dor&3"
+}

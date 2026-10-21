@@ -9,6 +9,7 @@
 //! replays one seed; all ids derive from the seed, so a replay is exact. With
 //! `BOTHY_SIM_TRACE=1` every step is printed, and a mismatch prints the differing documents.
 //! `BOTHY_SIM_NO_CLONE=1` turns off restored copies, to tell fork bugs from others.
+//! Every fourth seed runs an encrypted database (with the `crypto` feature).
 #![cfg(feature = "test-util")]
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -16,6 +17,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 
+use bothy::codec::DataKey;
 use bothy::codec::cbor::Encoder;
 use bothy::codec::keys::{KeyKind, LogicalKey};
 use bothy::codec::segment;
@@ -157,11 +159,33 @@ impl Sim {
             grace_period_days: 1,
         };
         // Seeded ids keep runs reproducible; each install has its own seed.
-        Config::new(&self.devices[i].path, "com.example.sim")
+        let config = Config::new(&self.devices[i].path, "com.example.sim")
             .deterministic_ids(self.seed.wrapping_mul(1000) + i as u64)
             .clock(self.devices[i].clock.clone())
             .pack_limits(limits)
-            .snapshot_policy(policy)
+            .snapshot_policy(policy);
+        #[cfg(feature = "crypto")]
+        let config = match (self.encrypted(), i) {
+            (true, 0) => config.kdf_cost(64, 1, 1).encrypt("sim"),
+            (true, _) => config.kdf_cost(64, 1, 1).password("sim"),
+            (false, _) => config,
+        };
+        config
+    }
+
+    fn encrypted(&self) -> bool {
+        cfg!(feature = "crypto") && self.seed % 4 == 1
+    }
+
+    /// The data key the oracle needs to read an encrypted remote.
+    async fn data_key(&mut self) -> Option<DataKey> {
+        if !self.encrypted() {
+            return None;
+        }
+        #[cfg(feature = "crypto")]
+        return Some(self.db(0).await.export_key().unwrap());
+        #[cfg(not(feature = "crypto"))]
+        unreachable!()
     }
 
     async fn db(&mut self, i: usize) -> Database {
@@ -347,7 +371,9 @@ impl Sim {
             .await
             .unwrap_or_else(|e| panic!("seed {seed}: join: {e}"));
 
-        let expected = oracle(self.remote.inner(), db_id).await;
+        let key = self.data_key().await;
+        assert_eq!(self.db(0).await.is_encrypted().await.unwrap(), self.encrypted());
+        let expected = oracle(self.remote.inner(), db_id, key.as_ref()).await;
         for i in 0..self.devices.len() {
             let dump = self.db(i).await.canonical_dump().await.unwrap();
             if dump != expected {
@@ -372,7 +398,8 @@ impl Sim {
             );
             let id = store.device_id();
             if !self.cloned_ids.contains(&id) {
-                let remote_ops = remote_op_count(self.remote.inner(), db_id, id).await;
+                let remote_ops =
+                    remote_op_count(self.remote.inner(), db_id, id, key.as_ref()).await;
                 assert_eq!(
                     store.outbox_count().unwrap(),
                     remote_ops,
@@ -409,7 +436,7 @@ fn explain(got: &[u8], want: &[u8]) {
 
 /// State computed directly from every snapshot and segment in the remote. Merging is
 /// idempotent and order-independent, so the union of all files gives the full state.
-async fn oracle(remote: &FolderRemote, db_id: DbId) -> Vec<u8> {
+async fn oracle(remote: &FolderRemote, db_id: DbId, data_key: Option<&DataKey>) -> Vec<u8> {
     let mut states: BTreeMap<(CollectionName, DocId), DocState> = BTreeMap::new();
     for e in remote.list(&format!("{db_id}/")).await.unwrap() {
         let Some(key) = LogicalKey::parse(&e.key) else {
@@ -418,13 +445,14 @@ async fn oracle(remote: &FolderRemote, db_id: DbId) -> Vec<u8> {
         let bytes = remote.get(&e.key).await.unwrap().unwrap();
         match key.kind {
             KeyKind::Segment(dev, seq) => {
-                let seg = segment::decode(
+                let seg = segment::decode_with(
                     &bytes,
                     &segment::Expected {
                         db_id,
                         device_id: dev,
                         seq,
                     },
+                    data_key,
                 )
                 .unwrap();
                 for op in seg.ops {
@@ -440,7 +468,7 @@ async fn oracle(remote: &FolderRemote, db_id: DbId) -> Vec<u8> {
                     device_id: dev,
                     hlc,
                 };
-                SnapshotReader::open(&bytes, &exp)
+                SnapshotReader::open_with(&bytes, &exp, data_key)
                     .unwrap()
                     .for_each_entry(|c, d, s| {
                         states.entry((c, d)).or_default().merge(&s);
@@ -459,7 +487,12 @@ async fn oracle(remote: &FolderRemote, db_id: DbId) -> Vec<u8> {
     enc.into_bytes()
 }
 
-async fn remote_op_count(remote: &FolderRemote, db_id: DbId, device: DeviceId) -> u64 {
+async fn remote_op_count(
+    remote: &FolderRemote,
+    db_id: DbId,
+    device: DeviceId,
+    key: Option<&DataKey>,
+) -> u64 {
     let mut n = 0;
     for e in remote
         .list(&format!("{db_id}/devices/{device}/"))
@@ -477,7 +510,7 @@ async fn remote_op_count(remote: &FolderRemote, db_id: DbId, device: DeviceId) -
                 device_id: device,
                 seq,
             };
-            n += segment::decode(&bytes, &exp).unwrap().ops.len() as u64;
+            n += segment::decode_with(&bytes, &exp, key).unwrap().ops.len() as u64;
         }
     }
     n

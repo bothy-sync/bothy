@@ -563,9 +563,9 @@ fn segment_vectors() -> Vec<(String, J)> {
             1,
         ),
         (
-            "encrypted_flag",
+            "encrypted_without_key",
             raw_segment(1, 2, 1, first, last, 4, &plain, [0; 24]),
-            "format_too_new",
+            "key_required",
             1,
         ),
         ("seq_does_not_match_key", good.clone(), "corrupt", 2),
@@ -769,5 +769,6 @@ pub fn all() -> Vec<(String, J)> {
     out.extend(merge_vectors());
     out.extend(segment_vectors());
     out.extend(snapshot_vectors());
+    out.extend(crate::crypto_vectors::all());
     out
 }

@@ -119,6 +119,9 @@ proptest! {
     #[test]
     fn manifests_and_keys(text in ".{0,200}") {
         let _ = Manifest::from_json(text.as_bytes(), None);
+        let _ = bothy::codec::manifest::KeyFile::from_json(text.as_bytes());
+        #[cfg(feature = "crypto")]
+        let _ = bothy::crypto::open_json(&bothy::crypto::DataKey::from_bytes([1; 32]), "k", text.as_bytes());
         if let Some(k) = LogicalKey::parse(&text) {
             prop_assert_eq!(k.to_string(), text);
         }

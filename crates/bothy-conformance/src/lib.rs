@@ -4,6 +4,7 @@
 //! implementation produces and verifies them.
 
 pub mod check;
+pub mod crypto_vectors;
 pub mod generate;
 pub mod typed;
 
