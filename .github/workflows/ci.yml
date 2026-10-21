@@ -34,8 +34,15 @@ jobs:
       - run: cargo test --workspace --locked
       - run: cargo clippy -p bothy --no-default-features --all-targets --locked -- -D warnings
       - run: cargo clippy -p bothy --all-features --all-targets --locked -- -D warnings
-      - name: Simulation (500 seeds)
-        run: cargo test -p bothy --features test-util --test simulation --locked
+
+  simulation:
+    name: Simulation (500 seeds)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p bothy --features test-util --test simulation --release --locked
 
   rust-msrv:
     name: Rust MSRV (1.88)
