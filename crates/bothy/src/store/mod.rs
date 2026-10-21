@@ -3,6 +3,7 @@
 //! This is the synchronous layer under the (upcoming) async `Database` API.
 
 mod schema;
+mod sync_state;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{File, OpenOptions};
@@ -20,6 +21,7 @@ use crate::merge::{DocState, FieldState, Superseded};
 use crate::model::{CollectionName, DeviceId, DocId, FieldName, Op, OpKind, Stamp, Value};
 
 pub use schema::SCHEMA_VERSION;
+pub use sync_state::{PackLimits, Packed, PendingUpload};
 
 /// Most recent conflict records kept per database.
 const CONFLICT_LOG_LIMIT: i64 = 1_000;
