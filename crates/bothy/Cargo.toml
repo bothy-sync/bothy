@@ -14,11 +14,13 @@ keywords = ["sync", "local-first", "offline", "google-drive", "hlc"]
 categories = ["database", "network-programming"]
 
 [features]
-default = ["blocking"]
+default = ["blocking", "drive"]
 # Synchronous API with its own runtime, for the CLI and bindings.
 blocking = ["tokio/rt-multi-thread"]
 # Fault-injecting remote for tests and simulations.
 test-util = []
+# Google Drive backend (Drive API v3 over rustls with the ring provider).
+drive = ["dep:reqwest", "dep:rustls", "dep:sha2"]
 
 [dependencies]
 async-trait = "0.1"
@@ -26,8 +28,11 @@ base64 = "0.23"
 blake3 = "1.8"
 fs4 = "1.1"
 getrandom = "0.4"
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"], optional = true }
 rusqlite = { version = "0.40", features = ["bundled"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
 serde_json = "1"
+sha2 = { version = "0.11", optional = true }
 tokio = { version = "1.54", features = ["macros", "rt", "sync", "time"] }
 zstd = "0.14"
 
@@ -35,6 +40,7 @@ zstd = "0.14"
 ciborium = "0.2"
 proptest = "1.12"
 tempfile = "3"
+wiremock = "0.6"
 tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "test-util"] }
 
 [lints]

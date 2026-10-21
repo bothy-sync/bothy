@@ -1,5 +1,7 @@
 //! Remote storage backends. Every file is immutable once written; there is no overwrite.
 
+#[cfg(feature = "drive")]
+pub mod drive;
 #[cfg(feature = "test-util")]
 pub mod faulty;
 mod folder;
