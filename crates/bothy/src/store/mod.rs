@@ -4,6 +4,7 @@
 
 mod schema;
 mod snapshots;
+mod status;
 mod sync_state;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -23,6 +24,7 @@ use crate::model::{CollectionName, DeviceId, DocId, FieldName, Op, OpKind, Stamp
 
 pub use schema::SCHEMA_VERSION;
 pub use snapshots::SinceSnapshot;
+pub use status::{DeviceStatus, LocalStatus};
 pub use sync_state::{PackLimits, Packed, PendingUpload};
 
 /// Most recent conflict records kept per database.

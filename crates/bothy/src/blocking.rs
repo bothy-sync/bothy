@@ -13,9 +13,9 @@ use crate::database::{ChangeEvent, IntoDocument, ListOptions, SyncReport};
 use crate::engine::{AutoSync, CompactReport, SyncStatus};
 use crate::error::{Error, ErrorKind, Result};
 use crate::merge::DocState;
-use crate::model::{DbId, DeviceId, DocId, Value};
+use crate::model::{CollectionName, DbId, DeviceId, DocId, Value};
 use crate::remote::RemoteStore;
-use crate::store::Conflict;
+use crate::store::{Conflict, DeviceStatus, LocalStatus};
 
 fn outside_runtime() -> Result<()> {
     if tokio::runtime::Handle::try_current().is_ok() {
@@ -94,6 +94,31 @@ impl Database {
     /// See [`crate::Database::compact`].
     pub fn compact(&self, dry_run: bool) -> Result<CompactReport> {
         self.run(self.db.compact(dry_run))
+    }
+
+    /// See [`crate::Database::status`].
+    pub fn status(&self) -> Result<LocalStatus> {
+        self.run(self.db.status())
+    }
+
+    /// See [`crate::Database::devices`].
+    pub fn devices(&self) -> Result<Vec<DeviceStatus>> {
+        self.run(self.db.devices())
+    }
+
+    /// See [`crate::Database::rename_device`].
+    pub fn rename_device(&self, device: DeviceId, name: &str) -> Result<()> {
+        self.run(self.db.rename_device(device, name))
+    }
+
+    /// See [`crate::Database::prune_device`].
+    pub fn prune_device(&self, device: DeviceId) -> Result<Vec<String>> {
+        self.run(self.db.prune_device(device))
+    }
+
+    /// See [`crate::Database::collections`].
+    pub fn collections(&self) -> Result<Vec<CollectionName>> {
+        self.run(self.db.collections())
     }
 
     /// See [`crate::Database::canonical_dump`].

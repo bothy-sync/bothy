@@ -14,7 +14,7 @@ use crate::model::{DbId, DeviceId};
 use crate::remote::{PutOutcome, RemoteEntry};
 
 pub use maintenance::CompactReport;
-pub(crate) use maintenance::{compact, create_snapshot};
+pub(crate) use maintenance::{compact, create_snapshot, prune_device};
 pub use scheduler::{AutoSync, SyncHandle, SyncStatus};
 
 async fn put_once(inner: &Inner, key: &LogicalKey, bytes: &[u8]) -> Result<()> {
@@ -392,6 +392,7 @@ pub(crate) async fn sync(inner: &Arc<Inner>) -> Result<SyncReport> {
     }
     pull(inner, db_id, fetched, &mut report).await?;
     maintenance::auto(inner, db_id, &mut report).await?;
+    inner.store(|s| s.set_last_sync_ms(s.wall_ms())).await?;
     Ok(report)
 }
 

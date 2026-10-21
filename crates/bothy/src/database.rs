@@ -12,7 +12,7 @@ use crate::hlc::{Clock, SystemClock};
 use crate::merge::DocState;
 use crate::model::{CollectionName, DbId, DeviceId, DocId, FieldName, Value};
 use crate::remote::RemoteStore;
-use crate::store::{Conflict, Document, PackLimits, Store};
+use crate::store::{Conflict, DeviceStatus, Document, LocalStatus, PackLimits, Store};
 
 /// When to snapshot and how long to keep covered files.
 #[derive(Clone, Copy, Debug)]
@@ -333,6 +333,43 @@ impl Database {
         let db_id = self.attached().await?;
         let _sync = self.inner.sync_lock.lock().await;
         engine::compact(&self.inner, db_id, dry_run).await
+    }
+
+    /// Local counters: documents, tombstones, unsent ops, last sync and known devices.
+    pub async fn status(&self) -> Result<LocalStatus> {
+        self.inner.store(|s| s.status()).await
+    }
+
+    /// Other devices this database has seen.
+    pub async fn devices(&self) -> Result<Vec<DeviceStatus>> {
+        self.inner.store(|s| s.devices()).await
+    }
+
+    /// Sets a local label for a device. Labels are not synced.
+    pub async fn rename_device(&self, device: DeviceId, name: &str) -> Result<()> {
+        let name = name.to_owned();
+        self.inner
+            .store(move |s| s.set_device_name(device, &name))
+            .await
+    }
+
+    /// Deletes the segments of a device that is gone for good (a lost phone), after uploading
+    /// a snapshot that covers them. This removes files another device owns, so only call it
+    /// with the user's explicit consent. Returns the deleted keys.
+    pub async fn prune_device(&self, device: DeviceId) -> Result<Vec<String>> {
+        let db_id = self.attached().await?;
+        let _sync = self.inner.sync_lock.lock().await;
+        engine::prune_device(&self.inner, db_id, device).await
+    }
+
+    /// Collections with at least one visible document.
+    pub async fn collections(&self) -> Result<Vec<CollectionName>> {
+        self.inner.store(|s| s.collections()).await
+    }
+
+    /// The remote store this database syncs through (for inspection tools).
+    pub fn remote(&self) -> &Arc<dyn RemoteStore> {
+        &self.inner.remote
     }
 
     async fn attached(&self) -> Result<DbId> {

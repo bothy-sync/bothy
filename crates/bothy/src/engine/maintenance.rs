@@ -199,6 +199,46 @@ pub(crate) async fn auto(inner: &Arc<Inner>, db_id: DbId, report: &mut SyncRepor
     Ok(())
 }
 
+/// Deletes the segments of another device that is gone for good, after uploading a snapshot
+/// that covers them. Its newest segment stays, as for compaction. Needs the user's consent.
+pub(crate) async fn prune_device(
+    inner: &Arc<Inner>,
+    db_id: DbId,
+    target: DeviceId,
+) -> Result<Vec<String>> {
+    if target == inner.device() {
+        return Err(Error::invalid_input(
+            "cannot prune this device; use compact",
+        ));
+    }
+    let watermark = inner.store(move |s| s.watermark(target)).await?;
+    if watermark == 0 {
+        return Ok(Vec::new());
+    }
+    // Our snapshot's vv covers the target up to its watermark.
+    create_snapshot(inner, db_id).await?;
+    let mut seqs: Vec<(u64, String)> = inner
+        .remote
+        .list(&format!("{db_id}/devices/{target}/seg-"))
+        .await?
+        .into_iter()
+        .filter_map(|e| match LogicalKey::parse(&e.key)?.kind {
+            KeyKind::Segment(_, seq) => Some((seq, e.key)),
+            _ => None,
+        })
+        .collect();
+    seqs.sort();
+    let newest = seqs.last().map(|(s, _)| *s);
+    let mut deleted = Vec::new();
+    for (seq, key) in seqs {
+        if seq <= watermark && Some(seq) != newest {
+            inner.remote.delete(&key).await?;
+            deleted.push(key);
+        }
+    }
+    Ok(deleted)
+}
+
 /// Deletes this device's segments covered by an own snapshot older than the grace period, and
 /// own snapshots superseded by such a snapshot. The newest own snapshot always stays.
 pub(crate) async fn compact(

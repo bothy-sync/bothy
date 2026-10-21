@@ -236,3 +236,81 @@ async fn automatic_snapshot_after_enough_segments() {
     assert_eq!(a.sync().await.unwrap().snapshots_up, 1);
     assert_eq!(env.count(&format!("{db_id}/snapshots/")).await, 1);
 }
+
+#[tokio::test]
+async fn status_devices_and_collections() {
+    let env = Env::new();
+    let a = env.open("a").await;
+    let db_id = a.init().await.unwrap();
+    let b = env.open("b").await;
+    b.join(db_id).await.unwrap();
+    write_n(&a, 0, 3).await;
+    a.collection("todos")
+        .unwrap()
+        .put("t", json!({"x": 1}))
+        .await
+        .unwrap();
+    a.collection("notes").unwrap().delete("n0").await.unwrap();
+
+    let st = a.status().await.unwrap();
+    assert_eq!((st.documents, st.tombstones, st.unpacked_ops), (3, 1, 5));
+    assert_eq!(st.last_sync_ms, None);
+    a.sync().await.unwrap();
+    let st = a.status().await.unwrap();
+    assert_eq!((st.unpacked_ops, st.pending_uploads), (0, 0));
+    assert!(st.last_sync_ms.is_some());
+    let names: Vec<_> = a
+        .collections()
+        .await
+        .unwrap()
+        .iter()
+        .map(|c| c.to_string())
+        .collect();
+    assert_eq!(names, ["notes", "todos"]);
+
+    b.sync().await.unwrap();
+    let devs = b.devices().await.unwrap();
+    assert_eq!(devs.len(), 1);
+    assert_eq!((devs[0].device_id, devs[0].watermark), (a.device_id(), 5));
+    b.rename_device(a.device_id(), "laptop").await.unwrap();
+    assert_eq!(
+        b.devices().await.unwrap()[0].name.as_deref(),
+        Some("laptop")
+    );
+}
+
+#[tokio::test]
+async fn pruning_a_lost_device_keeps_its_data_and_newest_segment() {
+    let env = Env::new();
+    let lost = env.open("lost").await;
+    let db_id = lost.init().await.unwrap();
+    write_n(&lost, 0, 4).await;
+    lost.sync().await.unwrap();
+    let lost_id = lost.device_id();
+    drop(lost);
+
+    let a = env.open("a").await;
+    a.join(db_id).await.unwrap();
+    assert!(
+        a.prune_device(a.device_id()).await.is_err(),
+        "own device is compacted, not pruned"
+    );
+    let deleted = a.prune_device(lost_id).await.unwrap();
+    assert_eq!(deleted.len(), 3);
+    assert_eq!(
+        env.count(&format!("{db_id}/devices/{lost_id}/seg-")).await,
+        1
+    );
+
+    let late = env.open("late").await;
+    late.join(db_id).await.unwrap();
+    same(&a, &late).await;
+    assert!(
+        late.collection("notes")
+            .unwrap()
+            .get("n0")
+            .await
+            .unwrap()
+            .is_some()
+    );
+}
