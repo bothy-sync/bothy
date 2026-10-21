@@ -1,0 +1,80 @@
+{
+  "about": "Unset fields and delete stamps stay in the state.",
+  "dump": "8284656e6f746573626e31f682836161821b018bcfe56800000150a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1f7836162821b018bcfe56800000050a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a10284656e6f746573626e32821b018bcfe56801000050b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b280",
+  "name": "unset_and_tombstones_are_kept",
+  "ops": [
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "fields": {
+          "a": {
+            "int": "1"
+          },
+          "b": {
+            "int": "2"
+          }
+        },
+        "hlc": "018bcfe568000000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "fields": [
+          "a"
+        ],
+        "hlc": "018bcfe568000001",
+        "kind": "unset"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n2",
+        "hlc": "018bcfe568010000",
+        "kind": "delete"
+      }
+    }
+  ],
+  "state": [
+    {
+      "collection": "notes",
+      "deleted_at": null,
+      "doc_id": "n1",
+      "fields": [
+        {
+          "name": "a",
+          "stamp": {
+            "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "hlc": "018bcfe568000001"
+          }
+        },
+        {
+          "name": "b",
+          "stamp": {
+            "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "hlc": "018bcfe568000000"
+          },
+          "value": {
+            "int": "2"
+          }
+        }
+      ]
+    },
+    {
+      "collection": "notes",
+      "deleted_at": {
+        "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+        "hlc": "018bcfe568010000"
+      },
+      "doc_id": "n2",
+      "fields": []
+    }
+  ]
+}

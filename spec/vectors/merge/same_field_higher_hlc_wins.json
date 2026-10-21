@@ -1,0 +1,48 @@
+{
+  "about": "Same field, different HLCs: the higher HLC wins whatever the order.",
+  "dump": "8184656e6f746573626e31f68183657469746c65821b018bcfe56805000050a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a16141",
+  "name": "same_field_higher_hlc_wins",
+  "ops": [
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "fields": {
+          "title": "A"
+        },
+        "hlc": "018bcfe568050000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "fields": {
+          "title": "B"
+        },
+        "hlc": "018bcfe568000009",
+        "kind": "set"
+      }
+    }
+  ],
+  "state": [
+    {
+      "collection": "notes",
+      "deleted_at": null,
+      "doc_id": "n1",
+      "fields": [
+        {
+          "name": "title",
+          "stamp": {
+            "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "hlc": "018bcfe568050000"
+          },
+          "value": "A"
+        }
+      ]
+    }
+  ]
+}

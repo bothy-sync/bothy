@@ -1,0 +1,79 @@
+{
+  "about": "A write after a delete revives the document with only the newer fields.",
+  "dump": "8184656e6f746573626e31821b018bcfe56814000050a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a182836161821b018bcfe5680a000050a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a101836162821b018bcfe5681e000050b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b203",
+  "name": "write_after_delete_revives_new_fields_only",
+  "ops": [
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "fields": {
+          "a": {
+            "int": "1"
+          },
+          "b": {
+            "int": "2"
+          }
+        },
+        "hlc": "018bcfe5680a0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "hlc": "018bcfe568140000",
+        "kind": "delete"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "fields": {
+          "b": {
+            "int": "3"
+          }
+        },
+        "hlc": "018bcfe5681e0000",
+        "kind": "set"
+      }
+    }
+  ],
+  "state": [
+    {
+      "collection": "notes",
+      "deleted_at": {
+        "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "hlc": "018bcfe568140000"
+      },
+      "doc_id": "n1",
+      "fields": [
+        {
+          "name": "a",
+          "stamp": {
+            "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "hlc": "018bcfe5680a0000"
+          },
+          "value": {
+            "int": "1"
+          }
+        },
+        {
+          "name": "b",
+          "stamp": {
+            "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "hlc": "018bcfe5681e0000"
+          },
+          "value": {
+            "int": "3"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,474 @@
+{
+  "invalid": [
+    {
+      "cbor": "1817",
+      "error": "corrupt",
+      "name": "non_shortest_uint8"
+    },
+    {
+      "cbor": "190017",
+      "error": "corrupt",
+      "name": "non_shortest_uint16"
+    },
+    {
+      "cbor": "1a0000ffff",
+      "error": "corrupt",
+      "name": "non_shortest_uint32"
+    },
+    {
+      "cbor": "1b00000000ffffffff",
+      "error": "corrupt",
+      "name": "non_shortest_uint64"
+    },
+    {
+      "cbor": "3817",
+      "error": "corrupt",
+      "name": "non_shortest_negative"
+    },
+    {
+      "cbor": "5801ff",
+      "error": "corrupt",
+      "name": "non_shortest_length"
+    },
+    {
+      "cbor": "1c",
+      "error": "corrupt",
+      "name": "reserved_additional_info"
+    },
+    {
+      "cbor": "9fff",
+      "error": "corrupt",
+      "name": "indefinite_array"
+    },
+    {
+      "cbor": "7f6161ff",
+      "error": "corrupt",
+      "name": "indefinite_text"
+    },
+    {
+      "cbor": "c000",
+      "error": "corrupt",
+      "name": "tag"
+    },
+    {
+      "cbor": "f7",
+      "error": "corrupt",
+      "name": "undefined"
+    },
+    {
+      "cbor": "f0",
+      "error": "corrupt",
+      "name": "simple_16"
+    },
+    {
+      "cbor": "f818",
+      "error": "corrupt",
+      "name": "simple_24"
+    },
+    {
+      "cbor": "f97e00",
+      "error": "corrupt",
+      "name": "nan"
+    },
+    {
+      "cbor": "f97c00",
+      "error": "corrupt",
+      "name": "infinity"
+    },
+    {
+      "cbor": "f98000",
+      "error": "corrupt",
+      "name": "negative_zero"
+    },
+    {
+      "cbor": "fa3f800000",
+      "error": "corrupt",
+      "name": "float_1_as_f32"
+    },
+    {
+      "cbor": "fb3ff0000000000000",
+      "error": "corrupt",
+      "name": "float_1_as_f64"
+    },
+    {
+      "cbor": "fb47efffffe0000000",
+      "error": "corrupt",
+      "name": "f32_max_as_f64"
+    },
+    {
+      "cbor": "a2616201616102",
+      "error": "corrupt",
+      "name": "unsorted_map_keys"
+    },
+    {
+      "cbor": "a2616101616102",
+      "error": "corrupt",
+      "name": "duplicate_map_keys"
+    },
+    {
+      "cbor": "a262616101616202",
+      "error": "corrupt",
+      "name": "longer_key_before_shorter"
+    },
+    {
+      "cbor": "a1010102",
+      "error": "corrupt",
+      "name": "integer_map_key"
+    },
+    {
+      "cbor": "1bffffffffffffffff",
+      "error": "corrupt",
+      "name": "uint_above_i64_max"
+    },
+    {
+      "cbor": "3b8000000000000000",
+      "error": "corrupt",
+      "name": "negative_below_i64_min"
+    },
+    {
+      "cbor": "62c328",
+      "error": "corrupt",
+      "name": "invalid_utf8"
+    },
+    {
+      "cbor": "1901",
+      "error": "corrupt",
+      "name": "truncated"
+    },
+    {
+      "cbor": "9a7fffffff",
+      "error": "corrupt",
+      "name": "array_longer_than_input"
+    },
+    {
+      "cbor": "0000",
+      "error": "corrupt",
+      "name": "trailing_bytes"
+    },
+    {
+      "cbor": "818181818181818181818181818181818181818181818181818181818181818181f6",
+      "error": "corrupt",
+      "name": "depth_33"
+    }
+  ],
+  "valid": [
+    {
+      "cbor": "f6",
+      "name": "null",
+      "value": null
+    },
+    {
+      "cbor": "f4",
+      "name": "false",
+      "value": false
+    },
+    {
+      "cbor": "f5",
+      "name": "true",
+      "value": true
+    },
+    {
+      "cbor": "00",
+      "name": "int_0",
+      "value": {
+        "int": "0"
+      }
+    },
+    {
+      "cbor": "17",
+      "name": "int_23",
+      "value": {
+        "int": "23"
+      }
+    },
+    {
+      "cbor": "1818",
+      "name": "int_24",
+      "value": {
+        "int": "24"
+      }
+    },
+    {
+      "cbor": "18ff",
+      "name": "int_255",
+      "value": {
+        "int": "255"
+      }
+    },
+    {
+      "cbor": "190100",
+      "name": "int_256",
+      "value": {
+        "int": "256"
+      }
+    },
+    {
+      "cbor": "1a00010000",
+      "name": "int_65536",
+      "value": {
+        "int": "65536"
+      }
+    },
+    {
+      "cbor": "1b0000000100000000",
+      "name": "int_2_pow_32",
+      "value": {
+        "int": "4294967296"
+      }
+    },
+    {
+      "cbor": "1b7fffffffffffffff",
+      "name": "int_max",
+      "value": {
+        "int": "9223372036854775807"
+      }
+    },
+    {
+      "cbor": "20",
+      "name": "int_minus_1",
+      "value": {
+        "int": "-1"
+      }
+    },
+    {
+      "cbor": "3818",
+      "name": "int_minus_25",
+      "value": {
+        "int": "-25"
+      }
+    },
+    {
+      "cbor": "3b7fffffffffffffff",
+      "name": "int_min",
+      "value": {
+        "int": "-9223372036854775808"
+      }
+    },
+    {
+      "cbor": "f90000",
+      "name": "float_0",
+      "value": {
+        "bits": "0000000000000000",
+        "float": 0.0
+      }
+    },
+    {
+      "cbor": "f93c00",
+      "name": "float_1_is_f16",
+      "value": {
+        "bits": "3ff0000000000000",
+        "float": 1.0
+      }
+    },
+    {
+      "cbor": "f93e00",
+      "name": "float_1_5_is_f16",
+      "value": {
+        "bits": "3ff8000000000000",
+        "float": 1.5
+      }
+    },
+    {
+      "cbor": "f97bff",
+      "name": "float_65504_is_f16",
+      "value": {
+        "bits": "40effc0000000000",
+        "float": 65504.0
+      }
+    },
+    {
+      "cbor": "f90001",
+      "name": "float_smallest_f16_subnormal",
+      "value": {
+        "bits": "3e70000000000000",
+        "float": 5.960464477539063e-8
+      }
+    },
+    {
+      "cbor": "fa47c35000",
+      "name": "float_100000_is_f32",
+      "value": {
+        "bits": "40f86a0000000000",
+        "float": 100000.0
+      }
+    },
+    {
+      "cbor": "fa7f7fffff",
+      "name": "float_f32_max",
+      "value": {
+        "bits": "47efffffe0000000",
+        "float": 3.4028234663852886e+38
+      }
+    },
+    {
+      "cbor": "fb3ff199999999999a",
+      "name": "float_1_1_is_f64",
+      "value": {
+        "bits": "3ff199999999999a",
+        "float": 1.1
+      }
+    },
+    {
+      "cbor": "fbc010666666666666",
+      "name": "float_minus_4_1",
+      "value": {
+        "bits": "c010666666666666",
+        "float": -4.1
+      }
+    },
+    {
+      "cbor": "fb7e37e43c8800759c",
+      "name": "float_1e300",
+      "value": {
+        "bits": "7e37e43c8800759c",
+        "float": 1e+300
+      }
+    },
+    {
+      "cbor": "60",
+      "name": "text_empty",
+      "value": ""
+    },
+    {
+      "cbor": "6449455446",
+      "name": "text_ascii",
+      "value": "IETF"
+    },
+    {
+      "cbor": "65c3bce6b0b4",
+      "name": "text_utf8",
+      "value": "ü水"
+    },
+    {
+      "cbor": "7818787878787878787878787878787878787878787878787878",
+      "name": "text_24_bytes",
+      "value": "xxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "cbor": "40",
+      "name": "bytes_empty",
+      "value": {
+        "bytes": ""
+      }
+    },
+    {
+      "cbor": "4401020304",
+      "name": "bytes",
+      "value": {
+        "bytes": "01020304"
+      }
+    },
+    {
+      "cbor": "80",
+      "name": "array_empty",
+      "value": []
+    },
+    {
+      "cbor": "82018102",
+      "name": "array_nested",
+      "value": [
+        {
+          "int": "1"
+        },
+        [
+          {
+            "int": "2"
+          }
+        ]
+      ]
+    },
+    {
+      "cbor": "a0",
+      "name": "map_empty",
+      "value": {
+        "map": {}
+      }
+    },
+    {
+      "cbor": "a3616302626262016361616103",
+      "name": "map_keys_shorter_first",
+      "value": {
+        "map": {
+          "aaa": {
+            "int": "3"
+          },
+          "bb": {
+            "int": "1"
+          },
+          "c": {
+            "int": "2"
+          }
+        }
+      }
+    },
+    {
+      "cbor": "8181818181818181818181818181818181818181818181818181818181818181f6",
+      "name": "depth_32",
+      "value": [
+        [
+          [
+            [
+              [
+                [
+                  [
+                    [
+                      [
+                        [
+                          [
+                            [
+                              [
+                                [
+                                  [
+                                    [
+                                      [
+                                        [
+                                          [
+                                            [
+                                              [
+                                                [
+                                                  [
+                                                    [
+                                                      [
+                                                        [
+                                                          [
+                                                            [
+                                                              [
+                                                                [
+                                                                  [
+                                                                    [
+                                                                      null
+                                                                    ]
+                                                                  ]
+                                                                ]
+                                                              ]
+                                                            ]
+                                                          ]
+                                                        ]
+                                                      ]
+                                                    ]
+                                                  ]
+                                                ]
+                                              ]
+                                            ]
+                                          ]
+                                        ]
+                                      ]
+                                    ]
+                                  ]
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    }
+  ]
+}

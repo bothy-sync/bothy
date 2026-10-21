@@ -1,0 +1,18 @@
+[package]
+name = "bothy-conformance"
+description = "Generates and checks the Bothy format conformance vectors in spec/vectors."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+bothy.workspace = true
+blake3 = "1.8"
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,79 @@
+{
+  "bytes": "42534e5000010001000102030405060708090a0b0c0d0e0fa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1018bcfe5680300000000000400000025a250a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a10350b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2010000005600000000000000000000000000000000000000000000000028b52ffd2053ad0100a4028184656e6f746573626e31f682836474616773821b018bcfe56800000150a1f783657469746c650061410300600aa3347e079c0000004a00000000000000000000000000000000000000000000000028b52ffd20314d010024028184656e6f746573626e32f68183657469746c65821b018bcfe56800000050b261420100e8c0130000003f00000000000000000000000000000000000000000000000028b52ffd2027f50000c08184656e6f746573626e33821b018bcfe56801000050b28001003bd0040000004800000000000000000000000000000000000000000000000028b52ffd202f3d01000402818465746f646f73627431f6818364646f6e65821b018bcfe56802000050a1f5010077c009ea5fb0c77807516ef4cbab4af49c5a3bb657cd2fb7b506a7c64789aa857e0347",
+  "chunk_target": 64,
+  "compressed": true,
+  "entries": [
+    {
+      "collection": "notes",
+      "deleted_at": null,
+      "doc_id": "n1",
+      "fields": [
+        {
+          "name": "tags",
+          "stamp": {
+            "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "hlc": "018bcfe568000001"
+          }
+        },
+        {
+          "name": "title",
+          "stamp": {
+            "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "hlc": "018bcfe568000000"
+          },
+          "value": "A"
+        }
+      ]
+    },
+    {
+      "collection": "notes",
+      "deleted_at": null,
+      "doc_id": "n2",
+      "fields": [
+        {
+          "name": "title",
+          "stamp": {
+            "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "hlc": "018bcfe568000000"
+          },
+          "value": "B"
+        }
+      ]
+    },
+    {
+      "collection": "notes",
+      "deleted_at": {
+        "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+        "hlc": "018bcfe568010000"
+      },
+      "doc_id": "n3",
+      "fields": []
+    },
+    {
+      "collection": "todos",
+      "deleted_at": null,
+      "doc_id": "t1",
+      "fields": [
+        {
+          "name": "done",
+          "stamp": {
+            "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "hlc": "018bcfe568020000"
+          },
+          "value": true
+        }
+      ]
+    }
+  ],
+  "header": {
+    "db_id": "000102030405060708090a0b0c0d0e0f",
+    "device_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "hlc": "018bcfe568030000",
+    "vv": {
+      "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1": 3,
+      "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2": 1
+    }
+  },
+  "key": "000102030405060708090a0b0c0d0e0f/snapshots/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1/snap-018bcfe568030000.bsnap",
+  "name": "zstd_multi_chunk"
+}

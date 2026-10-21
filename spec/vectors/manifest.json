@@ -1,0 +1,214 @@
+{
+  "invalid": [
+    {
+      "error": "format_too_new",
+      "manifest": {
+        "app_id": "com.example.notes",
+        "app_schema_version": 0,
+        "bothy_format": 2,
+        "codec": {
+          "compression": "zstd",
+          "serialization": "cbor"
+        },
+        "compaction": {
+          "grace_period_days": 7
+        },
+        "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "created_hlc": "018bcfe568000000",
+        "db_id": "000102030405060708090a0b0c0d0e0f",
+        "encryption": null
+      },
+      "name": "format_2"
+    },
+    {
+      "error": "format_too_new",
+      "manifest": {
+        "app_id": "com.example.notes",
+        "app_schema_version": 0,
+        "bothy_format": 1,
+        "codec": {
+          "compression": "zstd",
+          "serialization": "msgpack"
+        },
+        "compaction": {
+          "grace_period_days": 7
+        },
+        "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "created_hlc": "018bcfe568000000",
+        "db_id": "000102030405060708090a0b0c0d0e0f",
+        "encryption": null
+      },
+      "name": "unknown_serialization"
+    },
+    {
+      "error": "format_too_new",
+      "manifest": {
+        "app_id": "com.example.notes",
+        "app_schema_version": 0,
+        "bothy_format": 1,
+        "codec": {
+          "compression": "lz4",
+          "serialization": "cbor"
+        },
+        "compaction": {
+          "grace_period_days": 7
+        },
+        "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "created_hlc": "018bcfe568000000",
+        "db_id": "000102030405060708090a0b0c0d0e0f",
+        "encryption": null
+      },
+      "name": "unknown_compression"
+    },
+    {
+      "error": "corrupt",
+      "manifest": {
+        "app_schema_version": 0,
+        "bothy_format": 1,
+        "codec": {
+          "compression": "zstd",
+          "serialization": "cbor"
+        },
+        "compaction": {
+          "grace_period_days": 7
+        },
+        "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "created_hlc": "018bcfe568000000",
+        "db_id": "000102030405060708090a0b0c0d0e0f",
+        "encryption": null
+      },
+      "name": "missing_app_id"
+    },
+    {
+      "error": "corrupt",
+      "manifest": {
+        "app_id": "com.example.notes",
+        "app_schema_version": 0,
+        "bothy_format": 1,
+        "codec": {
+          "compression": "zstd",
+          "serialization": "cbor"
+        },
+        "compaction": {
+          "grace_period_days": 7
+        },
+        "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "created_hlc": "018bcfe568000000",
+        "db_id": "000102030405060708090A0B0C0D0E0F",
+        "encryption": null
+      },
+      "name": "uppercase_db_id"
+    },
+    {
+      "error": "corrupt",
+      "manifest": {
+        "app_id": "com.example.notes",
+        "app_schema_version": 0,
+        "bothy_format": 1,
+        "codec": {
+          "compression": "zstd",
+          "serialization": "cbor"
+        },
+        "compaction": {
+          "grace_period_days": 0
+        },
+        "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "created_hlc": "018bcfe568000000",
+        "db_id": "000102030405060708090a0b0c0d0e0f",
+        "encryption": null
+      },
+      "name": "grace_period_zero"
+    },
+    {
+      "error": "corrupt",
+      "manifest": {
+        "app_id": "com.example.notes",
+        "app_schema_version": 0,
+        "bothy_format": 1,
+        "codec": {
+          "compression": "zstd",
+          "serialization": "cbor"
+        },
+        "compaction": {
+          "grace_period_days": 7
+        },
+        "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "created_hlc": "018bcfe568000000",
+        "db_id": "000102030405060708090a0b0c0d0e0f",
+        "encryption": "yes"
+      },
+      "name": "encryption_not_object"
+    },
+    {
+      "error": "corrupt",
+      "manifest": [
+        1,
+        2
+      ],
+      "name": "not_an_object"
+    }
+  ],
+  "key": "000102030405060708090a0b0c0d0e0f/manifest.json",
+  "valid": [
+    {
+      "manifest": {
+        "app_id": "com.example.notes",
+        "app_schema_version": 0,
+        "bothy_format": 1,
+        "codec": {
+          "compression": "zstd",
+          "serialization": "cbor"
+        },
+        "compaction": {
+          "grace_period_days": 7
+        },
+        "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "created_hlc": "018bcfe568000000",
+        "db_id": "000102030405060708090a0b0c0d0e0f",
+        "encryption": null
+      },
+      "name": "default"
+    },
+    {
+      "manifest": {
+        "app_id": "com.example.notes",
+        "app_schema_version": 0,
+        "bothy_format": 1,
+        "codec": {
+          "compression": "none",
+          "serialization": "cbor"
+        },
+        "compaction": {
+          "grace_period_days": 7
+        },
+        "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "created_hlc": "018bcfe568000000",
+        "db_id": "000102030405060708090a0b0c0d0e0f",
+        "encryption": null
+      },
+      "name": "compression_none"
+    },
+    {
+      "manifest": {
+        "app_id": "com.example.notes",
+        "app_schema_version": 0,
+        "bothy_format": 1,
+        "codec": {
+          "compression": "zstd",
+          "serialization": "cbor"
+        },
+        "compaction": {
+          "grace_period_days": 7
+        },
+        "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "created_hlc": "018bcfe568000000",
+        "db_id": "000102030405060708090a0b0c0d0e0f",
+        "encryption": null,
+        "future_field": {
+          "x": 1
+        }
+      },
+      "name": "unknown_field_ignored"
+    }
+  ]
+}

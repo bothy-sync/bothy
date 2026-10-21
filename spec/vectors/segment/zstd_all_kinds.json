@@ -1,0 +1,45 @@
+{
+  "bytes": "4253454700010001000102030405060708090a0b0c0d0e0fa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a10000000000000001018bcfe568000000018bcfe568020000000000040000005e00000000000000000000000000000000000000000000000028b52ffd603f00a50200c40384851b018bcfe568000000656e6f746573626e3100a2657469746c656548656c6c6f6670696e6e6564f4010181013200a164626f647978c8780202f6080060e46c3240c4a92361f3cf6c81ca080a132b941e8a64e9f1fb3e8c902ce5bbaf3f47ee1260b29cbb7a612c7915809745fd14dae3",
+  "compressed": true,
+  "db_id": "000102030405060708090a0b0c0d0e0f",
+  "device_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+  "key": "000102030405060708090a0b0c0d0e0f/devices/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1/seg-0000000000000001.bseg",
+  "name": "zstd_all_kinds",
+  "ops": [
+    {
+      "collection": "notes",
+      "doc_id": "n1",
+      "fields": {
+        "pinned": false,
+        "title": "Hello"
+      },
+      "hlc": "018bcfe568000000",
+      "kind": "set"
+    },
+    {
+      "collection": "notes",
+      "doc_id": "n1",
+      "fields": [
+        "pinned"
+      ],
+      "hlc": "018bcfe568000001",
+      "kind": "unset"
+    },
+    {
+      "collection": "notes",
+      "doc_id": "n2",
+      "fields": {
+        "body": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "hlc": "018bcfe568010000",
+      "kind": "set"
+    },
+    {
+      "collection": "notes",
+      "doc_id": "n2",
+      "hlc": "018bcfe568020000",
+      "kind": "delete"
+    }
+  ],
+  "seq": 1
+}

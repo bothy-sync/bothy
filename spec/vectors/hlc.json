@@ -1,0 +1,111 @@
+{
+  "clock": [
+    {
+      "max_drift_ms": 3600000,
+      "name": "same_millisecond_and_clock_going_back",
+      "start": "0000000000000000",
+      "steps": [
+        {
+          "expect": "018bcfe568000000",
+          "now": 1700000000000
+        },
+        {
+          "expect": "018bcfe568000001",
+          "now": 1700000000000
+        },
+        {
+          "expect": "018bcfe568000002",
+          "now": 1699999995000
+        },
+        {
+          "expect": "018bcfe568010000",
+          "now": 1700000000001
+        }
+      ]
+    },
+    {
+      "max_drift_ms": 3600000,
+      "name": "logical_overflow_borrows_next_ms",
+      "start": "018bcfe56800ffff",
+      "steps": [
+        {
+          "expect": "018bcfe568010000",
+          "now": 1700000000000
+        }
+      ]
+    },
+    {
+      "max_drift_ms": 3600000,
+      "name": "observe_moves_past_remote",
+      "start": "0000000000000000",
+      "steps": [
+        {
+          "expect": "018bcfe568000000",
+          "now": 1700000000000
+        },
+        {
+          "expect": "018bcfe5680a0004",
+          "observe": "018bcfe5680a0003",
+          "wall": 1700000000000
+        },
+        {
+          "expect": "018bcfe5680a0005",
+          "now": 1700000000000
+        }
+      ]
+    },
+    {
+      "max_drift_ms": 1000,
+      "name": "observe_clamps_far_future",
+      "start": "0000000000000000",
+      "steps": [
+        {
+          "expect": "018bcfe56be90000",
+          "observe": "018bd01c56800000",
+          "wall": 1700000000000
+        },
+        {
+          "expect": "018bcfe56be90001",
+          "now": 1700000000000
+        }
+      ]
+    },
+    {
+      "max_drift_ms": 3600000,
+      "name": "wall_clock_beyond_48_bits",
+      "start": "0000000000000000",
+      "steps": [
+        {
+          "expect": "ffffffffffff0000",
+          "now": 281474976710661
+        }
+      ]
+    }
+  ],
+  "parts": [
+    {
+      "hex": "018bcfe568000001",
+      "logical": 1,
+      "physical": 1700000000000,
+      "u64": "111411200000000001"
+    },
+    {
+      "hex": "0000000000000000",
+      "logical": 0,
+      "physical": 0,
+      "u64": "0"
+    },
+    {
+      "hex": "ffffffffffffffff",
+      "logical": 65535,
+      "physical": 281474976710655,
+      "u64": "18446744073709551615"
+    },
+    {
+      "hex": "018bcfe5687b01c8",
+      "logical": 456,
+      "physical": 1700000000123,
+      "u64": "111411200008061384"
+    }
+  ]
+}

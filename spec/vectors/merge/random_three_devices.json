@@ -1,0 +1,909 @@
+{
+  "about": "60 pseudo-random ops from three devices.",
+  "dump": "8484656974656d73626430821b018bcfe56826000050c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c383836161821b018bcfe5681d000050a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1184b836162821b018bcfe5682c000050a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1184c836163821b018bcfe5681d000050b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2183484656974656d73626431821b018bcfe5682f000050a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a183836161821b018bcfe5682d000050b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b21821836162821b018bcfe56833000050a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a11841836163821b018bcfe56828000050b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2f784656974656d73626432821b018bcfe56829000050a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a182836161821b018bcfe56825000050c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3184a836163821b018bcfe56822000050b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2f784656974656d73626433821b018bcfe56823000050a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a183836161821b018bcfe56832000050a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1184f836162821b018bcfe56824000050c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c31823836163821b018bcfe56821000050c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3181b",
+  "name": "random_three_devices",
+  "ops": [
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "fields": {
+          "a": {
+            "int": "56"
+          }
+        },
+        "hlc": "018bcfe568030000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "fields": {
+          "c": {
+            "int": "90"
+          }
+        },
+        "hlc": "018bcfe568010000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d0",
+        "fields": {
+          "b": {
+            "int": "99"
+          }
+        },
+        "hlc": "018bcfe568020000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "hlc": "018bcfe568050000",
+        "kind": "delete"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "hlc": "018bcfe568030000",
+        "kind": "delete"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "fields": {
+          "a": {
+            "int": "88"
+          }
+        },
+        "hlc": "018bcfe568030000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": {
+          "b": {
+            "int": "93"
+          }
+        },
+        "hlc": "018bcfe568060000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": [
+          "b"
+        ],
+        "hlc": "018bcfe568090000",
+        "kind": "unset"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d3",
+        "fields": {
+          "b": {
+            "int": "46"
+          }
+        },
+        "hlc": "018bcfe568050000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d3",
+        "fields": [
+          "b"
+        ],
+        "hlc": "018bcfe568080000",
+        "kind": "unset"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d0",
+        "fields": [
+          "c"
+        ],
+        "hlc": "018bcfe568060000",
+        "kind": "unset"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "fields": {
+          "a": {
+            "int": "31"
+          }
+        },
+        "hlc": "018bcfe5680c0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": {
+          "c": {
+            "int": "88"
+          }
+        },
+        "hlc": "018bcfe5680f0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d0",
+        "hlc": "018bcfe568110000",
+        "kind": "delete"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "fields": {
+          "c": {
+            "int": "19"
+          }
+        },
+        "hlc": "018bcfe5680b0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": {
+          "c": {
+            "int": "94"
+          }
+        },
+        "hlc": "018bcfe568140000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d3",
+        "hlc": "018bcfe568070000",
+        "kind": "delete"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d0",
+        "fields": [
+          "a"
+        ],
+        "hlc": "018bcfe568080000",
+        "kind": "unset"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d0",
+        "hlc": "018bcfe568160000",
+        "kind": "delete"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": {
+          "a": {
+            "int": "44"
+          }
+        },
+        "hlc": "018bcfe568170000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": {
+          "c": {
+            "int": "16"
+          }
+        },
+        "hlc": "018bcfe5680b0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": {
+          "c": {
+            "int": "52"
+          }
+        },
+        "hlc": "018bcfe5680d0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "fields": {
+          "c": {
+            "int": "59"
+          }
+        },
+        "hlc": "018bcfe5680e0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": {
+          "c": {
+            "int": "45"
+          }
+        },
+        "hlc": "018bcfe5680c0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "fields": {
+          "c": {
+            "int": "73"
+          }
+        },
+        "hlc": "018bcfe5681a0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "fields": [
+          "a"
+        ],
+        "hlc": "018bcfe568100000",
+        "kind": "unset"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "fields": [
+          "a"
+        ],
+        "hlc": "018bcfe5680d0000",
+        "kind": "unset"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": {
+          "b": {
+            "int": "84"
+          }
+        },
+        "hlc": "018bcfe568100000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d3",
+        "fields": {
+          "a": {
+            "int": "4"
+          }
+        },
+        "hlc": "018bcfe568130000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "hlc": "018bcfe568130000",
+        "kind": "delete"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d0",
+        "fields": {
+          "b": {
+            "int": "46"
+          }
+        },
+        "hlc": "018bcfe568150000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": [
+          "b"
+        ],
+        "hlc": "018bcfe568160000",
+        "kind": "unset"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d3",
+        "fields": [
+          "b"
+        ],
+        "hlc": "018bcfe568180000",
+        "kind": "unset"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d3",
+        "fields": {
+          "a": {
+            "int": "58"
+          }
+        },
+        "hlc": "018bcfe5681b0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d0",
+        "fields": {
+          "c": {
+            "int": "52"
+          }
+        },
+        "hlc": "018bcfe5681d0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": {
+          "c": {
+            "int": "32"
+          }
+        },
+        "hlc": "018bcfe568170000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d3",
+        "fields": [
+          "b"
+        ],
+        "hlc": "018bcfe568190000",
+        "kind": "unset"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "hlc": "018bcfe5681c0000",
+        "kind": "delete"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d3",
+        "fields": {
+          "b": {
+            "int": "9"
+          }
+        },
+        "hlc": "018bcfe5681e0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "hlc": "018bcfe5681f0000",
+        "kind": "delete"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": {
+          "c": {
+            "int": "35"
+          }
+        },
+        "hlc": "018bcfe568200000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "fields": [
+          "c"
+        ],
+        "hlc": "018bcfe568220000",
+        "kind": "unset"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "fields": {
+          "a": {
+            "int": "32"
+          }
+        },
+        "hlc": "018bcfe568250000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d0",
+        "fields": {
+          "a": {
+            "int": "75"
+          }
+        },
+        "hlc": "018bcfe5681d0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d3",
+        "fields": {
+          "c": {
+            "int": "27"
+          }
+        },
+        "hlc": "018bcfe568210000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "fields": {
+          "a": {
+            "int": "98"
+          }
+        },
+        "hlc": "018bcfe568200000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d3",
+        "fields": {
+          "b": {
+            "int": "35"
+          }
+        },
+        "hlc": "018bcfe568240000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d3",
+        "hlc": "018bcfe568230000",
+        "kind": "delete"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "fields": {
+          "a": {
+            "int": "74"
+          }
+        },
+        "hlc": "018bcfe568250000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": [
+          "c"
+        ],
+        "hlc": "018bcfe568280000",
+        "kind": "unset"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": [
+          "a"
+        ],
+        "hlc": "018bcfe568260000",
+        "kind": "unset"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d2",
+        "hlc": "018bcfe568290000",
+        "kind": "delete"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": {
+          "b": {
+            "int": "23"
+          }
+        },
+        "hlc": "018bcfe5682b0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": {
+          "a": {
+            "int": "33"
+          }
+        },
+        "hlc": "018bcfe5682d0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "op": {
+        "collection": "items",
+        "doc_id": "d0",
+        "hlc": "018bcfe568260000",
+        "kind": "delete"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d0",
+        "fields": {
+          "b": {
+            "int": "76"
+          }
+        },
+        "hlc": "018bcfe5682c0000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "hlc": "018bcfe5682f0000",
+        "kind": "delete"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "items",
+        "doc_id": "d3",
+        "fields": {
+          "a": {
+            "int": "19"
+          }
+        },
+        "hlc": "018bcfe568300000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d3",
+        "fields": {
+          "a": {
+            "int": "79"
+          }
+        },
+        "hlc": "018bcfe568320000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "items",
+        "doc_id": "d1",
+        "fields": {
+          "b": {
+            "int": "65"
+          }
+        },
+        "hlc": "018bcfe568330000",
+        "kind": "set"
+      }
+    }
+  ],
+  "state": [
+    {
+      "collection": "items",
+      "deleted_at": {
+        "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+        "hlc": "018bcfe568260000"
+      },
+      "doc_id": "d0",
+      "fields": [
+        {
+          "name": "a",
+          "stamp": {
+            "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "hlc": "018bcfe5681d0000"
+          },
+          "value": {
+            "int": "75"
+          }
+        },
+        {
+          "name": "b",
+          "stamp": {
+            "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "hlc": "018bcfe5682c0000"
+          },
+          "value": {
+            "int": "76"
+          }
+        },
+        {
+          "name": "c",
+          "stamp": {
+            "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "hlc": "018bcfe5681d0000"
+          },
+          "value": {
+            "int": "52"
+          }
+        }
+      ]
+    },
+    {
+      "collection": "items",
+      "deleted_at": {
+        "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "hlc": "018bcfe5682f0000"
+      },
+      "doc_id": "d1",
+      "fields": [
+        {
+          "name": "a",
+          "stamp": {
+            "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "hlc": "018bcfe5682d0000"
+          },
+          "value": {
+            "int": "33"
+          }
+        },
+        {
+          "name": "b",
+          "stamp": {
+            "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "hlc": "018bcfe568330000"
+          },
+          "value": {
+            "int": "65"
+          }
+        },
+        {
+          "name": "c",
+          "stamp": {
+            "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "hlc": "018bcfe568280000"
+          }
+        }
+      ]
+    },
+    {
+      "collection": "items",
+      "deleted_at": {
+        "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "hlc": "018bcfe568290000"
+      },
+      "doc_id": "d2",
+      "fields": [
+        {
+          "name": "a",
+          "stamp": {
+            "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "hlc": "018bcfe568250000"
+          },
+          "value": {
+            "int": "74"
+          }
+        },
+        {
+          "name": "c",
+          "stamp": {
+            "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "hlc": "018bcfe568220000"
+          }
+        }
+      ]
+    },
+    {
+      "collection": "items",
+      "deleted_at": {
+        "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "hlc": "018bcfe568230000"
+      },
+      "doc_id": "d3",
+      "fields": [
+        {
+          "name": "a",
+          "stamp": {
+            "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "hlc": "018bcfe568320000"
+          },
+          "value": {
+            "int": "79"
+          }
+        },
+        {
+          "name": "b",
+          "stamp": {
+            "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "hlc": "018bcfe568240000"
+          },
+          "value": {
+            "int": "35"
+          }
+        },
+        {
+          "name": "c",
+          "stamp": {
+            "device": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "hlc": "018bcfe568210000"
+          },
+          "value": {
+            "int": "27"
+          }
+        }
+      ]
+    }
+  ]
+}

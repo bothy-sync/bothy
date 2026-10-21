@@ -1,0 +1,133 @@
+{
+  "invalid": [
+    {
+      "cbor": "851b018bcfe568000001656e6f746573626e3103f6",
+      "error": "format_too_new",
+      "name": "unknown_kind"
+    },
+    {
+      "cbor": "851b018bcfe568000001656e6f746573626e3100a0",
+      "error": "corrupt",
+      "name": "empty_set_fields"
+    },
+    {
+      "cbor": "851b018bcfe568000001656e6f746573626e310180",
+      "error": "corrupt",
+      "name": "empty_unset_fields"
+    },
+    {
+      "cbor": "851b018bcfe568000001656e6f746573626e31018261626161",
+      "error": "corrupt",
+      "name": "unset_not_sorted"
+    },
+    {
+      "cbor": "851b018bcfe568000001656e6f746573626e31018261616161",
+      "error": "corrupt",
+      "name": "unset_repeated"
+    },
+    {
+      "cbor": "851b018bcfe568000001656e6f746573626e310200",
+      "error": "corrupt",
+      "name": "delete_payload_not_null"
+    },
+    {
+      "cbor": "851b018bcfe568000001656e6f746573626e3100a16001",
+      "error": "corrupt",
+      "name": "empty_field_name"
+    },
+    {
+      "cbor": "8400656e6f746573626e3102",
+      "error": "corrupt",
+      "name": "four_elements"
+    },
+    {
+      "cbor": "8500654e6f746573626e3102f6",
+      "error": "corrupt",
+      "name": "bad_collection_name"
+    },
+    {
+      "cbor": "8500656e6f7465736002f6",
+      "error": "corrupt",
+      "name": "empty_doc_id"
+    }
+  ],
+  "valid": [
+    {
+      "cbor": "851b018bcfe568000001656e6f746573626e3100a1657469746c656548656c6c6f",
+      "name": "set_one_field",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "fields": {
+          "title": "Hello"
+        },
+        "hlc": "018bcfe568000001",
+        "kind": "set"
+      }
+    },
+    {
+      "cbor": "851b018bcfe568000002656e6f746573626e3100a3616e26657469746c656248696670696e6e6564f4",
+      "name": "set_fields_sorted_by_encoded_key",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "fields": {
+          "n": {
+            "int": "-7"
+          },
+          "pinned": false,
+          "title": "Hi"
+        },
+        "hlc": "018bcfe568000002",
+        "kind": "set"
+      }
+    },
+    {
+      "cbor": "851b018bcfe568000003656e6f746573626e310183614261616162",
+      "name": "unset_fields_byte_order",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "fields": [
+          "B",
+          "a",
+          "b"
+        ],
+        "hlc": "018bcfe568000003",
+        "kind": "unset"
+      }
+    },
+    {
+      "cbor": "851b018bcfe568000004656e6f746573626e3102f6",
+      "name": "delete",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "hlc": "018bcfe568000004",
+        "kind": "delete"
+      }
+    },
+    {
+      "cbor": "851b018bcfe5680100006a746f646f5f6974656d736ec3bc6ec3af63c3b864c3a92f696400a16464617461a1616b81f93800",
+      "name": "set_nested_and_unicode",
+      "op": {
+        "collection": "todo_items",
+        "doc_id": "ünïcødé/id",
+        "fields": {
+          "data": {
+            "map": {
+              "k": [
+                {
+                  "bits": "3fe0000000000000",
+                  "float": 0.5
+                }
+              ]
+            }
+          }
+        },
+        "hlc": "018bcfe568010000",
+        "kind": "set"
+      }
+    }
+  ]
+}

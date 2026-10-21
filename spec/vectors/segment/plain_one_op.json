@@ -1,0 +1,21 @@
+{
+  "bytes": "4253454700010000000102030405060708090a0b0c0d0e0fa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a10000000000000001018bcfe568000000018bcfe568000000000000010000002a00000000000000000000000000000000000000000000000081851b018bcfe568000000656e6f746573626e3100a2657469746c656548656c6c6f6670696e6e6564f48fc23fda6ddd83ee6698cd27f6a847f3b0108e8f68cbf67178c87e8e2080af54",
+  "compressed": false,
+  "db_id": "000102030405060708090a0b0c0d0e0f",
+  "device_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+  "key": "000102030405060708090a0b0c0d0e0f/devices/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1/seg-0000000000000001.bseg",
+  "name": "plain_one_op",
+  "ops": [
+    {
+      "collection": "notes",
+      "doc_id": "n1",
+      "fields": {
+        "pinned": false,
+        "title": "Hello"
+      },
+      "hlc": "018bcfe568000000",
+      "kind": "set"
+    }
+  ],
+  "seq": 1
+}

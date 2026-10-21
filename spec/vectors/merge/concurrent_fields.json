@@ -1,0 +1,56 @@
+{
+  "about": "Two devices edit different fields of the same document; both edits survive.",
+  "dump": "8184656e6f746573626e31f682836474616773821b018bcfe56800000050b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2617883657469746c65821b018bcfe56800000050a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a16141",
+  "name": "concurrent_fields",
+  "ops": [
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "fields": {
+          "title": "A"
+        },
+        "hlc": "018bcfe568000000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "fields": {
+          "tags": "x"
+        },
+        "hlc": "018bcfe568000000",
+        "kind": "set"
+      }
+    }
+  ],
+  "state": [
+    {
+      "collection": "notes",
+      "deleted_at": null,
+      "doc_id": "n1",
+      "fields": [
+        {
+          "name": "tags",
+          "stamp": {
+            "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "hlc": "018bcfe568000000"
+          },
+          "value": "x"
+        },
+        {
+          "name": "title",
+          "stamp": {
+            "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "hlc": "018bcfe568000000"
+          },
+          "value": "A"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "about": "A write stamped before a delete does not revive the document, even if it arrives later.",
+  "dump": "8184656e6f746573626e31821b018bcfe5681e000050a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1828364626f6479821b018bcfe56814000050b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2646c61746583657469746c65821b018bcfe56800000050a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a16141",
+  "name": "late_write_before_delete_stays_deleted",
+  "ops": [
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "fields": {
+          "title": "A"
+        },
+        "hlc": "018bcfe568000000",
+        "kind": "set"
+      }
+    },
+    {
+      "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "hlc": "018bcfe5681e0000",
+        "kind": "delete"
+      }
+    },
+    {
+      "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "op": {
+        "collection": "notes",
+        "doc_id": "n1",
+        "fields": {
+          "body": "late"
+        },
+        "hlc": "018bcfe568140000",
+        "kind": "set"
+      }
+    }
+  ],
+  "state": [
+    {
+      "collection": "notes",
+      "deleted_at": {
+        "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "hlc": "018bcfe5681e0000"
+      },
+      "doc_id": "n1",
+      "fields": [
+        {
+          "name": "body",
+          "stamp": {
+            "device": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "hlc": "018bcfe568140000"
+          },
+          "value": "late"
+        },
+        {
+          "name": "title",
+          "stamp": {
+            "device": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "hlc": "018bcfe568000000"
+          },
+          "value": "A"
+        }
+      ]
+    }
+  ]
+}
