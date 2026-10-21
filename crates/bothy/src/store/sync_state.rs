@@ -234,6 +234,28 @@ impl Store {
             .transpose()
     }
 
+    /// When the change feed was last backed up by a full listing.
+    pub fn last_full_list_ms(&self) -> Result<u64> {
+        let v: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'last_full_list_ms'",
+                [],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(v.unwrap_or(0) as u64)
+    }
+
+    /// Records a full listing.
+    pub fn set_last_full_list_ms(&mut self, ms: u64) -> Result<()> {
+        set_meta(
+            &self.conn,
+            "last_full_list_ms",
+            ms.min(i64::MAX as u64) as i64,
+        )
+    }
+
     /// Saves the change-feed cursor.
     pub fn set_change_cursor(&mut self, cursor: &str) -> Result<()> {
         set_meta(&self.conn, "change_cursor", cursor.as_bytes())

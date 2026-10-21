@@ -251,15 +251,28 @@ struct Fetched {
     next_cursor: Option<String>,
 }
 
+/// How often a change feed is backed up by a full listing, in case it missed a file.
+const FULL_LIST_EVERY_MS: u64 = 24 * 60 * 60 * 1000;
+
 async fn fetch(inner: &Arc<Inner>, db_id: DbId) -> Result<Fetched> {
     let cursor = inner.store(|s| s.change_cursor()).await?;
+    let prefix = format!("{db_id}/");
     Ok(match inner.remote.changes_since(cursor.as_deref()).await? {
-        Some(batch) => Fetched {
-            entries: batch.changed,
-            next_cursor: Some(batch.cursor),
-        },
+        Some(mut batch) => {
+            let (now, last) = inner
+                .store(|s| Ok((s.wall_ms(), s.last_full_list_ms()?)))
+                .await?;
+            if cursor.is_some() && now.saturating_sub(last) >= FULL_LIST_EVERY_MS {
+                batch.changed.extend(inner.remote.list(&prefix).await?);
+                inner.store(move |s| s.set_last_full_list_ms(now)).await?;
+            }
+            Fetched {
+                entries: batch.changed,
+                next_cursor: Some(batch.cursor),
+            }
+        }
         None => Fetched {
-            entries: inner.remote.list(&format!("{db_id}/")).await?,
+            entries: inner.remote.list(&prefix).await?,
             next_cursor: None,
         },
     })
