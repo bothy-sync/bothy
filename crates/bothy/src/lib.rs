@@ -5,7 +5,7 @@
 //! append-only files through the user's own cloud storage (Google Drive first).
 //!
 //! **Status: early development.** This crate currently contains the data model
-//! ([`Value`], [`Op`]), the canonical CBOR codec and the
+//! ([`Value`], [`Op`]), the canonical CBOR codec, the field-level merge rules and the
 //! [`Hlc`] (hybrid logical clock) that orders every change. The local store, the sync engine,
 //! the Drive backend and the CLI are being built at <https://github.com/bothy-sync/bothy>.
 //!
@@ -24,6 +24,7 @@
 pub mod codec;
 mod error;
 mod hlc;
+pub mod merge;
 pub mod model;
 
 pub use error::{Error, ErrorKind, Result};
