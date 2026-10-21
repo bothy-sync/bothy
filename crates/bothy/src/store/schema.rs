@@ -92,6 +92,21 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX conflict_log_doc ON conflict_log (collection, doc_id);
     ",
+    // v2: snapshots
+    "
+    -- Remote snapshots already merged into the local state, by logical key.
+    CREATE TABLE applied_snapshots (
+      key TEXT PRIMARY KEY
+    ) WITHOUT ROWID;
+
+    -- Snapshots of this device; vv = canonical CBOR map device_id -> seq.
+    -- state: 0 = upload started, 1 = confirmed on the remote, 2 = deleted by compaction.
+    CREATE TABLE own_snapshots (
+      hlc INTEGER PRIMARY KEY,
+      vv BLOB NOT NULL,
+      state INTEGER NOT NULL DEFAULT 0
+    );
+    ",
 ];
 
 /// Schema version this build writes.

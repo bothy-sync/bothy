@@ -96,7 +96,7 @@ impl Manifest {
             app_schema_version: 0,
             compression: Compression::Zstd,
             encryption: None,
-            grace_period_days: 7,
+            grace_period_days: 30,
         })
     }
 

@@ -3,6 +3,7 @@
 //! This is the synchronous layer under the (upcoming) async `Database` API.
 
 mod schema;
+mod snapshots;
 mod sync_state;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -21,6 +22,7 @@ use crate::merge::{DocState, FieldState, Superseded};
 use crate::model::{CollectionName, DeviceId, DocId, FieldName, Op, OpKind, Stamp, Value};
 
 pub use schema::SCHEMA_VERSION;
+pub use snapshots::SinceSnapshot;
 pub use sync_state::{PackLimits, Packed, PendingUpload};
 
 /// Most recent conflict records kept per database.
@@ -80,6 +82,16 @@ pub struct Store {
     device: DeviceId,
     hlc: HlcClock,
     clock: Arc<dyn Clock>,
+    id_seed: Option<u64>,
+}
+
+/// A 16-byte id derived from a test seed.
+fn derive_id(seed: u64, purpose: &[u8], extra: &[u8]) -> [u8; 16] {
+    let mut h = blake3::Hasher::new();
+    h.update(&seed.to_be_bytes());
+    h.update(purpose);
+    h.update(extra);
+    h.finalize().as_bytes()[..16].try_into().expect("16 bytes")
 }
 
 impl std::fmt::Debug for Store {
@@ -101,6 +113,16 @@ impl Store {
     /// Opens or creates the database at `path`. A second open of the same path, from this or
     /// another process, fails with `DatabaseLocked` while the first is alive.
     pub fn open(path: impl AsRef<Path>, clock: Arc<dyn Clock>) -> Result<Store> {
+        Self::open_with(path, clock, None)
+    }
+
+    /// Like [`Store::open`], but with `id_seed` every new id (device, database, fork) is derived
+    /// from the seed instead of the system random generator. Only for deterministic tests.
+    pub fn open_with(
+        path: impl AsRef<Path>,
+        clock: Arc<dyn Clock>,
+        id_seed: Option<u64>,
+    ) -> Result<Store> {
         let path = path.as_ref();
         let lock = OpenOptions::new()
             .create(true)
@@ -131,7 +153,10 @@ impl Store {
         let device = match get_meta(&conn, "device_id")? {
             Some(b) => device_from_sql(b)?,
             None => {
-                let d = DeviceId::random()?;
+                let d = match id_seed {
+                    Some(seed) => DeviceId::from_bytes(derive_id(seed, b"device", &[])),
+                    None => DeviceId::random()?,
+                };
                 set_meta(&conn, "device_id", d.as_bytes().as_slice())?;
                 d
             }
@@ -148,7 +173,27 @@ impl Store {
             device,
             hlc,
             clock,
+            id_seed,
         })
+    }
+
+    /// A new database id (from the test seed if the store has one).
+    pub fn new_db_id(&self) -> Result<crate::model::DbId> {
+        match self.id_seed {
+            Some(seed) => Ok(crate::model::DbId::from_bytes(derive_id(seed, b"db", &[]))),
+            None => crate::model::DbId::random(),
+        }
+    }
+
+    pub(crate) fn new_fork_id(&self) -> Result<DeviceId> {
+        match self.id_seed {
+            Some(seed) => Ok(DeviceId::from_bytes(derive_id(
+                seed,
+                b"fork",
+                self.device.as_bytes(),
+            ))),
+            None => DeviceId::random(),
+        }
     }
 
     /// This device's id.
@@ -372,7 +417,8 @@ impl Store {
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let done: bool = tx.query_row(
-            "SELECT EXISTS (SELECT 1 FROM applied_segments WHERE device_id = ?1 AND seq = ?2)",
+            "SELECT EXISTS (SELECT 1 FROM applied_segments WHERE device_id = ?1 AND seq = ?2)
+                OR EXISTS (SELECT 1 FROM devices WHERE device_id = ?1 AND watermark >= ?2)",
             params![device.as_bytes().as_slice(), seq_sql],
             |r| r.get(0),
         )?;

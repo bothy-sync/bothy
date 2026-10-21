@@ -11,7 +11,7 @@
           "serialization": "cbor"
         },
         "compaction": {
-          "grace_period_days": 7
+          "grace_period_days": 30
         },
         "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
         "created_hlc": "018bcfe568000000",
@@ -31,7 +31,7 @@
           "serialization": "msgpack"
         },
         "compaction": {
-          "grace_period_days": 7
+          "grace_period_days": 30
         },
         "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
         "created_hlc": "018bcfe568000000",
@@ -51,7 +51,7 @@
           "serialization": "cbor"
         },
         "compaction": {
-          "grace_period_days": 7
+          "grace_period_days": 30
         },
         "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
         "created_hlc": "018bcfe568000000",
@@ -70,7 +70,7 @@
           "serialization": "cbor"
         },
         "compaction": {
-          "grace_period_days": 7
+          "grace_period_days": 30
         },
         "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
         "created_hlc": "018bcfe568000000",
@@ -90,7 +90,7 @@
           "serialization": "cbor"
         },
         "compaction": {
-          "grace_period_days": 7
+          "grace_period_days": 30
         },
         "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
         "created_hlc": "018bcfe568000000",
@@ -130,7 +130,7 @@
           "serialization": "cbor"
         },
         "compaction": {
-          "grace_period_days": 7
+          "grace_period_days": 30
         },
         "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
         "created_hlc": "018bcfe568000000",
@@ -160,7 +160,7 @@
           "serialization": "cbor"
         },
         "compaction": {
-          "grace_period_days": 7
+          "grace_period_days": 30
         },
         "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
         "created_hlc": "018bcfe568000000",
@@ -179,7 +179,7 @@
           "serialization": "cbor"
         },
         "compaction": {
-          "grace_period_days": 7
+          "grace_period_days": 30
         },
         "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
         "created_hlc": "018bcfe568000000",
@@ -198,7 +198,7 @@
           "serialization": "cbor"
         },
         "compaction": {
-          "grace_period_days": 7
+          "grace_period_days": 30
         },
         "created_by": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
         "created_hlc": "018bcfe568000000",

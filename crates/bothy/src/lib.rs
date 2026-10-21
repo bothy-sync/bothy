@@ -49,9 +49,10 @@ pub mod remote;
 pub mod store;
 
 pub use database::{
-    ChangeEvent, Collection, Config, Database, IntoDocument, ListOptions, Origin, SyncReport,
+    ChangeEvent, Collection, Config, Database, IntoDocument, ListOptions, Origin, SnapshotPolicy,
+    SyncReport,
 };
-pub use engine::{AutoSync, SyncHandle, SyncStatus};
+pub use engine::{AutoSync, CompactReport, SyncHandle, SyncStatus};
 pub use error::{Error, ErrorKind, Result};
 pub use hlc::{Clock, DEFAULT_MAX_DRIFT_MS, Hlc, HlcClock, ParseHlcError, SystemClock};
 pub use model::{CollectionName, DbId, DeviceId, DocId, FieldName, Op, OpKind, Stamp, Value};

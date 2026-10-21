@@ -93,6 +93,21 @@ impl DocState {
         }
     }
 
+    /// Merges another state of the same document (e.g. from a snapshot): per field the larger
+    /// stamp wins, and the larger delete stamp is kept. Same properties as [`DocState::apply`].
+    pub fn merge(&mut self, other: &DocState) -> Vec<Superseded> {
+        let mut lost = Vec::new();
+        if let Some(d) = other.deleted_at
+            && self.deleted_at.is_none_or(|mine| d > mine)
+        {
+            self.deleted_at = Some(d);
+        }
+        for (name, f) in &other.fields {
+            self.write(name, f.stamp, f.value.as_ref(), &mut lost);
+        }
+        lost
+    }
+
     /// Whether a field write is visible: newer than the delete stamp and not unset.
     fn is_visible(&self, f: &FieldState) -> bool {
         f.value.is_some() && self.deleted_at.is_none_or(|d| f.stamp > d)
@@ -264,6 +279,15 @@ mod tests {
                 shuffled.swap(i, (x % (i as u64 + 1)) as usize);
             }
             prop_assert_eq!(apply_all(&ops), apply_all(&shuffled));
+        }
+
+        // Snapshot equivalence: state(prefix) merged with state(rest) equals state(all).
+        #[test]
+        fn merging_states_equals_applying_all_ops(ops in arb_ops(), split in 0usize..40) {
+            let split = split.min(ops.len());
+            let mut merged = apply_all(&ops[..split]);
+            merged.merge(&apply_all(&ops[split..]));
+            prop_assert_eq!(merged, apply_all(&ops));
         }
 
         #[test]

@@ -212,7 +212,8 @@ impl Store {
     /// Whether segment `seq` of `device` has been applied.
     pub fn is_applied(&self, device: DeviceId, seq: u64) -> Result<bool> {
         Ok(self.conn.query_row(
-            "SELECT EXISTS (SELECT 1 FROM applied_segments WHERE device_id = ?1 AND seq = ?2)",
+            "SELECT EXISTS (SELECT 1 FROM applied_segments WHERE device_id = ?1 AND seq = ?2)
+                OR EXISTS (SELECT 1 FROM devices WHERE device_id = ?1 AND watermark >= ?2)",
             params![device.as_bytes().as_slice(), seq as i64],
             |r| r.get(0),
         )?)

@@ -10,7 +10,7 @@ use tokio::sync::broadcast;
 
 use crate::Config;
 use crate::database::{ChangeEvent, IntoDocument, ListOptions, SyncReport};
-use crate::engine::{AutoSync, SyncStatus};
+use crate::engine::{AutoSync, CompactReport, SyncStatus};
 use crate::error::{Error, ErrorKind, Result};
 use crate::merge::DocState;
 use crate::model::{DbId, DeviceId, DocId, Value};
@@ -72,7 +72,7 @@ impl Database {
     }
 
     /// See [`crate::Database::join`].
-    pub fn join(&self, db_id: DbId) -> Result<()> {
+    pub fn join(&self, db_id: DbId) -> Result<SyncReport> {
         self.run(self.db.join(db_id))
     }
 
@@ -84,6 +84,16 @@ impl Database {
     /// See [`crate::Database::sync`].
     pub fn sync(&self) -> Result<SyncReport> {
         self.run(self.db.sync())
+    }
+
+    /// See [`crate::Database::snapshot`].
+    pub fn snapshot(&self) -> Result<String> {
+        self.run(self.db.snapshot())
+    }
+
+    /// See [`crate::Database::compact`].
+    pub fn compact(&self, dry_run: bool) -> Result<CompactReport> {
+        self.run(self.db.compact(dry_run))
     }
 
     /// See [`crate::Database::canonical_dump`].
