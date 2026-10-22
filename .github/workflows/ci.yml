@@ -159,5 +159,15 @@ jobs:
             macOS) flutter build macos --debug && flutter build ios --simulator --debug ;;
             Windows) flutter build windows --debug ;;
           esac
-      - if: runner.os == 'Linux'
-        run: flutter pub publish --dry-run
+      # flutter_rust_bridge is pinned on purpose (the Dart runtime must match the generated
+      # code), so its "should allow more than one version" warning is the only one allowed.
+      - name: pub publish --dry-run
+        if: runner.os == 'Linux'
+        run: |
+          set +e
+          out=$(flutter pub publish --dry-run 2>&1); code=$?
+          echo "$out"
+          [ $code -eq 0 ] && exit 0
+          echo "$out" | grep -q 'Package has 1 warning' \
+            && echo "$out" | grep -q 'dependency on "flutter_rust_bridge" should allow more than one version' \
+            || exit 1
