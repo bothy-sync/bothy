@@ -50,3 +50,6 @@ app.*.map.json
 # OAuth client ids and the desktop client secret (see README)
 /oauth.json
 /ios/Flutter/OAuth.xcconfig
+
+# Kotlin compiler state
+/android/.kotlin/

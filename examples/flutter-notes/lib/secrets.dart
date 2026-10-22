@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'config.dart';
+
 bool get isMobile => Platform.isAndroid || Platform.isIOS;
 
 /// Small secrets: the database key and, on desktop, the Google refresh token.
@@ -42,13 +44,16 @@ class SecretStore {
     if (await f.exists()) await f.delete();
   }
 
+  /// A local-folder run keeps its key apart from the Drive database's.
+  static String get _keyName =>
+      localRemote.isEmpty ? 'database_key' : 'database_key_local';
+
   Future<Uint8List?> readKey() async {
-    final s = await read('database_key');
+    final s = await read(_keyName);
     return s == null ? null : base64Decode(s);
   }
 
-  Future<void> writeKey(Uint8List key) =>
-      write('database_key', base64Encode(key));
+  Future<void> writeKey(Uint8List key) => write(_keyName, base64Encode(key));
 
-  Future<void> deleteKey() => delete('database_key');
+  Future<void> deleteKey() => delete(_keyName);
 }
