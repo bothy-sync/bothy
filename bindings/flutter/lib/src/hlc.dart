@@ -21,7 +21,9 @@ final class Hlc implements Comparable<Hlc> {
   factory Hlc.parse(String text) {
     if (!_hexPattern.hasMatch(text)) {
       throw FormatException(
-          'HLC must be exactly 16 lowercase hex characters', text);
+        'HLC must be exactly 16 lowercase hex characters',
+        text,
+      );
     }
     return Hlc(
       int.parse(text.substring(0, 12), radix: 16),
