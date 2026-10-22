@@ -10,20 +10,23 @@ use bothy::merge::DocState;
 use bothy::remote::drive::DriveRemote;
 use bothy::remote::{FolderRemote, RemoteStore};
 use bothy::{
-    AutoSync, Config, Database, DbId, DeviceId, ListOptions, Origin, Stamp, SyncReport, Value,
+    AutoSync, Config, Database, DbId, DeviceId, ErrorKind, ListOptions, Origin, Stamp, SyncReport,
+    Value,
 };
 use serde_json::{Value as J, json};
 
-use crate::cli::{Auth, Command, Devices, Inspect, Join, Setup, Snapshot};
+use crate::cli::{Auth, Command, Devices, Init, Inspect, Join, Setup, Snapshot};
 use crate::config::{CliConfig, DbEntry, Paths, RemoteSpec, check_db_name, write_private};
 use crate::fail::{CliError, CliResult};
 use crate::oauth::{self, SCOPE_APPDATA, SCOPE_FILE};
+use crate::secrets::{self, Ask};
 use crate::tokens;
 
 pub struct Ctx {
     pub paths: Paths,
     pub json: bool,
     pub db: String,
+    pub password_stdin: bool,
 }
 
 impl Ctx {
@@ -111,6 +114,17 @@ pub fn parse_since(s: &str, now_ms: u64) -> CliResult<u64> {
     Ok(((days * 86_400 + hh * 3600 + mm * 60 + ss) * 1000) as u64)
 }
 
+fn encryption_note(encrypted: bool, kept: Option<&str>) -> String {
+    match (encrypted, kept) {
+        (false, _) => String::new(),
+        (true, Some(w)) => format!("\nencrypted; the data key is kept in {w}"),
+        (true, None) => {
+            "\nencrypted; syncing asks for the password (`bothy unlock --remember` keeps the key)"
+                .into()
+        }
+    }
+}
+
 fn conflict_json(c: &bothy::store::Conflict) -> J {
     json!({
         "time": fmt_ms(c.at_ms),
@@ -175,7 +189,26 @@ fn remote_for(ctx: &Ctx, spec: &RemoteSpec) -> CliResult<Arc<dyn RemoteStore>> {
     })
 }
 
+/// Opens the database; an encrypted one is unlocked with its remembered key, if there is one.
 async fn open_db(ctx: &Ctx, entry: &DbEntry) -> CliResult<Database> {
+    let db = open_db_with(ctx, entry, |c| c).await?;
+    if let Some(db_id) = db.db_id().await?
+        && db.is_locked().await?
+        && let Some(key) = secrets::remembered(&ctx.paths, db_id)
+        && db.unlock_with_key(key).await.is_err()
+    {
+        eprintln!(
+            "warning: the remembered key does not unlock this database; run `bothy unlock --remember` again"
+        );
+    }
+    Ok(db)
+}
+
+async fn open_db_with(
+    ctx: &Ctx,
+    entry: &DbEntry,
+    tweak: impl FnOnce(Config) -> Config,
+) -> CliResult<Database> {
     let remote = remote_for(ctx, &entry.remote)?;
     std::fs::create_dir_all(&ctx.paths.data)
         .map_err(|e| CliError::io("cannot create data directory", e))?;
@@ -183,7 +216,27 @@ async fn open_db(ctx: &Ctx, entry: &DbEntry) -> CliResult<Database> {
     if let Some(h) = host_name() {
         config = config.device_name(&h);
     }
-    Ok(Database::open(config, remote).await?)
+    Ok(Database::open(tweak(config), remote).await?)
+}
+
+/// For commands that need the data key: unlocks a locked database with its password.
+async fn unlocked(ctx: &Ctx, db: &Database) -> CliResult<()> {
+    if db.is_locked().await? {
+        let password = secrets::read(ctx.password_stdin, Ask::Current)?;
+        db.unlock(&password).await?;
+    }
+    Ok(())
+}
+
+async fn encrypted_db_id(db: &Database) -> CliResult<DbId> {
+    let db_id = db
+        .db_id()
+        .await?
+        .ok_or_else(|| CliError::usage("database is not attached"))?;
+    if !db.is_encrypted().await? {
+        return Err(CliError::usage("this database is not encrypted"));
+    }
+    Ok(db_id)
 }
 
 async fn open(ctx: &Ctx) -> CliResult<Database> {
@@ -343,30 +396,132 @@ pub async fn run(mut ctx: Ctx, command: Command) -> CliResult<()> {
     match command {
         Command::Auth(a) => auth(&ctx, a).await,
 
-        Command::Init(setup) => {
+        Command::Init(Init {
+            setup,
+            encrypt,
+            remember,
+        }) => {
             let (mut config, entry) = setup_entry(&mut ctx, &setup)?;
-            let db = open_db(&ctx, &entry).await?;
+            let password = if encrypt {
+                Some(secrets::read(ctx.password_stdin, Ask::Create)?)
+            } else {
+                None
+            };
+            let db = open_db_with(&ctx, &entry, |c| match &password {
+                Some(p) => c.encrypt(p),
+                None => c,
+            })
+            .await?;
             let db_id = db.init().await?;
             config.dbs.insert(ctx.db.clone(), entry.clone());
             config.save(&ctx.paths)?;
-            ctx.out(json!({"db": ctx.db, "db_id": db_id.to_hex(), "remote": entry.remote.to_config(), "device_id": db.device_id().to_hex()}), || {
-                format!("created database {db_id} as {:?} on {}\nthis device: {}", ctx.db, entry.remote.to_config(), db.device_id())
+            let kept = if remember {
+                Some(secrets::remember(&ctx.paths, db_id, &db.export_key()?)?)
+            } else {
+                None
+            };
+            ctx.out(json!({"db": ctx.db, "db_id": db_id.to_hex(), "remote": entry.remote.to_config(), "device_id": db.device_id().to_hex(), "encrypted": encrypt, "key_remembered": kept.is_some()}), || {
+                let mut s = format!("created database {db_id} as {:?} on {}\nthis device: {}", ctx.db, entry.remote.to_config(), db.device_id());
+                s.push_str(&encryption_note(encrypt, kept.as_deref()));
+                s
             });
             Ok(())
         }
 
-        Command::Join(Join { setup, db_id }) => {
+        Command::Join(Join {
+            setup,
+            remember,
+            db_id,
+        }) => {
             let (mut config, entry) = setup_entry(&mut ctx, &setup)?;
-            let db = open_db(&ctx, &entry).await?;
+            // Ask for a password only if the database turns out to be encrypted.
+            let mut password =
+                if secrets::available_without_prompt(ctx.password_stdin, Ask::Current) {
+                    Some(secrets::read(ctx.password_stdin, Ask::Current)?)
+                } else {
+                    None
+                };
+            let with_password = |p: &Option<secrets::Password>| {
+                let p = p.clone();
+                move |c: Config| match &p {
+                    Some(p) => c.password(p),
+                    None => c,
+                }
+            };
+            let mut db = open_db_with(&ctx, &entry, with_password(&password)).await?;
             let db_id = match db_id {
                 Some(s) => s.parse::<DbId>()?,
                 None => find_db(db.remote().as_ref(), &entry.app_id).await?,
             };
-            let report = db.join(db_id).await?;
+            let report = match db.join(db_id).await {
+                Err(e) if e.kind() == ErrorKind::KeyRequired && password.is_none() => {
+                    password = Some(secrets::read(ctx.password_stdin, Ask::Current)?);
+                    drop(db);
+                    db = open_db_with(&ctx, &entry, with_password(&password)).await?;
+                    db.join(db_id).await?
+                }
+                r => r?,
+            };
             config.dbs.insert(ctx.db.clone(), entry.clone());
             config.save(&ctx.paths)?;
-            ctx.out(json!({"db": ctx.db, "db_id": db_id.to_hex(), "device_id": db.device_id().to_hex(), "report": report_json(&report)}), || {
-                format!("joined database {db_id} as {:?}\nthis device: {}\n{}", ctx.db, db.device_id(), report_text(&report))
+            let encrypted = db.is_encrypted().await?;
+            let kept = if remember && encrypted {
+                Some(secrets::remember(&ctx.paths, db_id, &db.export_key()?)?)
+            } else {
+                None
+            };
+            ctx.out(json!({"db": ctx.db, "db_id": db_id.to_hex(), "device_id": db.device_id().to_hex(), "encrypted": encrypted, "key_remembered": kept.is_some(), "report": report_json(&report)}), || {
+                let mut s = format!("joined database {db_id} as {:?}\nthis device: {}\n{}", ctx.db, db.device_id(), report_text(&report));
+                s.push_str(&encryption_note(encrypted, kept.as_deref()));
+                s
+            });
+            Ok(())
+        }
+
+        Command::Unlock { remember } => {
+            let db = open(&ctx).await?;
+            let db_id = encrypted_db_id(&db).await?;
+            let password = secrets::read(ctx.password_stdin, Ask::Current)?;
+            db.unlock(&password).await?;
+            let kept = if remember {
+                Some(secrets::remember(&ctx.paths, db_id, &db.export_key()?)?)
+            } else {
+                None
+            };
+            ctx.out(
+                json!({"unlocked": true, "key_remembered": kept.is_some()}),
+                || match &kept {
+                    Some(w) => format!("password ok; the data key is kept in {w}"),
+                    None => {
+                        "password ok (add --remember to keep the data key on this machine)".into()
+                    }
+                },
+            );
+            Ok(())
+        }
+
+        Command::Lock => {
+            let db = open(&ctx).await?;
+            let db_id = encrypted_db_id(&db).await?;
+            let forgotten = secrets::forget(&ctx.paths, db_id);
+            ctx.out(json!({"forgotten": forgotten}), || {
+                if forgotten {
+                    "forgot the data key; commands that sync will ask for the password".into()
+                } else {
+                    "no data key was kept on this machine".into()
+                }
+            });
+            Ok(())
+        }
+
+        Command::Passwd => {
+            let db = open(&ctx).await?;
+            encrypted_db_id(&db).await?;
+            let old = secrets::read(ctx.password_stdin, Ask::Current)?;
+            let new = secrets::read(ctx.password_stdin, Ask::Change)?;
+            db.change_password(&old, &new).await?;
+            ctx.out(json!({"changed": true}), || {
+                "password changed; the old one stops working on every device".into()
             });
             Ok(())
         }
@@ -472,6 +627,7 @@ pub async fn run(mut ctx: Ctx, command: Command) -> CliResult<()> {
 
         Command::Sync { watch: false } => {
             let db = open(&ctx).await?;
+            unlocked(&ctx, &db).await?;
             let report = db.sync().await?;
             ctx.out(report_json(&report), || report_text(&report));
             Ok(())
@@ -479,6 +635,7 @@ pub async fn run(mut ctx: Ctx, command: Command) -> CliResult<()> {
 
         Command::Sync { watch: true } => {
             let db = open(&ctx).await?;
+            unlocked(&ctx, &db).await?;
             let mut events = db.subscribe();
             let handle = db.start_auto_sync(AutoSync::default());
             let mut status = handle.watch();
@@ -514,6 +671,7 @@ pub async fn run(mut ctx: Ctx, command: Command) -> CliResult<()> {
             let db = open_db(&ctx, &entry).await?;
             let st = db.status().await?;
             let db_id = db.db_id().await?;
+            let (encrypted, locked) = (db.is_encrypted().await?, db.is_locked().await?);
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0, |d| d.as_millis() as u64);
@@ -543,6 +701,8 @@ pub async fn run(mut ctx: Ctx, command: Command) -> CliResult<()> {
                     "pending_uploads": st.pending_uploads,
                     "last_sync": st.last_sync_ms.map(fmt_ms),
                     "clock_ahead_ms": ahead_ms,
+                    "encrypted": encrypted,
+                    "locked": locked,
                     "devices": devices,
                 }),
                 || {
@@ -558,6 +718,11 @@ pub async fn run(mut ctx: Ctx, command: Command) -> CliResult<()> {
                         st.pending_uploads,
                         st.last_sync_ms.map_or("never".to_owned(), fmt_ms),
                     );
+                    s.push_str(match (encrypted, locked) {
+                        (false, _) => "\nencryption: off",
+                        (true, false) => "\nencryption: on, unlocked (data key kept on this machine)",
+                        (true, true) => "\nencryption: on, locked (syncing asks for the password; `bothy unlock --remember` keeps the key)",
+                    });
                     if ahead_ms > 1000 {
                         s.push_str(&format!("\nclock: other devices are {} s ahead of this machine", ahead_ms / 1000));
                     }
@@ -639,6 +804,7 @@ pub async fn run(mut ctx: Ctx, command: Command) -> CliResult<()> {
                 ));
             }
             let db = open(&ctx).await?;
+            unlocked(&ctx, &db).await?;
             let deleted = db.prune_device(device_id.parse()?).await?;
             ctx.out(json!({"deleted": deleted}), || {
                 format!(
@@ -651,6 +817,7 @@ pub async fn run(mut ctx: Ctx, command: Command) -> CliResult<()> {
 
         Command::Snapshot(Snapshot::Create) => {
             let db = open(&ctx).await?;
+            unlocked(&ctx, &db).await?;
             let key = db.snapshot().await?;
             ctx.out(json!({"key": key}), || format!("uploaded {key}"));
             Ok(())
@@ -658,6 +825,7 @@ pub async fn run(mut ctx: Ctx, command: Command) -> CliResult<()> {
 
         Command::Compact { dry_run } => {
             let db = open(&ctx).await?;
+            unlocked(&ctx, &db).await?;
             let r = db.compact(dry_run).await?;
             let verb = if dry_run { "would delete" } else { "deleted" };
             ctx.out(

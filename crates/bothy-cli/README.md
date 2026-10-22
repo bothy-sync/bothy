@@ -72,8 +72,9 @@ runs this between your computer and a Linux container.
 ```
 bothy auth setup --client <json> [--device-client <json>]
 bothy auth login [--device] | logout | status
-bothy init  [--name <db>] [--remote appdata|folder[:<name>]|path:<dir>] [--app-id <id>]
-bothy join  [--name <db>] [--remote ...] [--db-id <id>]
+bothy init  [--name <db>] [--remote appdata|folder[:<name>]|path:<dir>] [--app-id <id>] [--encrypt [--remember]]
+bothy join  [--name <db>] [--remote ...] [--db-id <id>] [--remember]
+bothy unlock [--remember] | lock | passwd
 bothy put   <collection> <id> <json|@file|@-> [--patch] [--unset a,b]
 bothy get   <collection> <id> [--with-meta]
 bothy list  <collection> [--limit N] [--after <id>]
@@ -88,8 +89,23 @@ bothy inspect remote
 bothy export <collection> | --all
 ```
 
-Global options: `--db <name>` picks a local database (default `default`), and `--json` prints
-machine-readable output.
+Global options: `--db <name>` picks a local database (default `default`), `--json` prints
+machine-readable output, and `--password-stdin` reads passwords from stdin, one per line.
+
+## Encrypted databases
+
+`bothy init --encrypt` asks for a password twice and encrypts everything the database stores on
+Drive. Other machines join with the same password. Local reads and writes never need it;
+commands that sync ask for it unless the data key is remembered:
+
+- `bothy unlock --remember` checks the password and keeps the data key in the system keyring
+  (or in a `0600` file where there is none). `bothy lock` forgets it.
+- `bothy passwd` changes the password. The old one stops working on every device; remembered
+  keys keep working.
+- In scripts, set `BOTHY_PASSWORD` (and `BOTHY_NEW_PASSWORD` for `passwd`) or pass
+  `--password-stdin`.
+
+Passwords and keys are never printed. A forgotten password cannot be recovered.
 
 Exit codes: 0 ok, 1 error, 2 usage, 3 sign-in needed, 4 offline, 5 remote inconsistent or
 format too new.

@@ -19,6 +19,10 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub json: bool,
 
+    /// Read passwords from stdin, one per line, instead of prompting.
+    #[arg(long, global = true)]
+    pub password_stdin: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -29,9 +33,19 @@ pub enum Command {
     #[command(subcommand)]
     Auth(Auth),
     /// Create a new synced database.
-    Init(Setup),
+    Init(Init),
     /// Join an existing synced database.
     Join(Join),
+    /// Check the password of an encrypted database, and keep its key here with --remember.
+    Unlock {
+        /// Keep the data key in the system keyring so later commands need no password.
+        #[arg(long)]
+        remember: bool,
+    },
+    /// Forget the data key kept by `unlock --remember`.
+    Lock,
+    /// Change the password of an encrypted database (on every device).
+    Passwd,
     /// Write a document (a JSON object, or @file).
     Put {
         collection: String,
@@ -145,9 +159,24 @@ pub struct Setup {
 }
 
 #[derive(Args, Debug)]
+pub struct Init {
+    #[command(flatten)]
+    pub setup: Setup,
+    /// Encrypt the database with a password (asked twice, or BOTHY_PASSWORD).
+    #[arg(long)]
+    pub encrypt: bool,
+    /// With --encrypt: keep the data key in the system keyring.
+    #[arg(long, requires = "encrypt")]
+    pub remember: bool,
+}
+
+#[derive(Args, Debug)]
 pub struct Join {
     #[command(flatten)]
     pub setup: Setup,
+    /// If the database is encrypted: keep the data key in the system keyring.
+    #[arg(long)]
+    pub remember: bool,
     /// Database id to join; by default the oldest database of the app id on the remote.
     #[arg(long)]
     pub db_id: Option<String>,

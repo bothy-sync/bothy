@@ -61,6 +61,9 @@ impl From<bothy::Error> for CliError {
             _ => 1,
         };
         let mut message = e.to_string();
+        if e.kind() == ErrorKind::KeyRequired {
+            message.push_str("\nhint: run `bothy unlock --remember`, set BOTHY_PASSWORD, or pass --password-stdin");
+        }
         if e.kind() == ErrorKind::AuthRequired {
             message.push_str("\nhint: run `bothy auth login` (or `bothy auth login --device` on a headless machine)");
         }

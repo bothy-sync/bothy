@@ -24,6 +24,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   `Config::conflict_log(limit)` (default 1,000 records, `None` turns logging off), and the
   CLI command `bothy conflicts [--since <duration|date>] [--clear]`. `Conflict` now carries
   the collection, document id and the time it was recorded, and is `#[non_exhaustive]`.
+- CLI: `init --encrypt`, `unlock [--remember]`, `lock`, `passwd`, `--remember` on `init` and
+  `join`, the global `--password-stdin` flag, and `BOTHY_PASSWORD` / `BOTHY_NEW_PASSWORD`.
+  `status` shows whether the database is encrypted and locked.
 - Conformance vectors for the crypto primitives and encrypted segments and snapshots; a fuzz
   target for key files and sealed JSON; encrypted seeds in the simulation.
 

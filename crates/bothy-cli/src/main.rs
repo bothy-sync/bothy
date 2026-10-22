@@ -5,6 +5,7 @@ mod commands;
 mod config;
 mod fail;
 mod oauth;
+mod secrets;
 mod tokens;
 
 use std::process::ExitCode;
@@ -23,6 +24,7 @@ fn main() -> ExitCode {
     let ctx = commands::Ctx {
         paths,
         json: args.json,
+        password_stdin: args.password_stdin,
         db: args.db,
     };
     let rt = match tokio::runtime::Builder::new_multi_thread()

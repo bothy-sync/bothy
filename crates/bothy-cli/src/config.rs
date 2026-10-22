@@ -44,6 +44,11 @@ impl Paths {
         self.config.join("token.json")
     }
 
+    /// The remembered data key of an encrypted database, when there is no keyring.
+    pub fn key_file(&self, db_id: bothy::DbId) -> PathBuf {
+        self.config.join("keys").join(format!("{db_id}.key"))
+    }
+
     pub fn db_file(&self, name: &str) -> PathBuf {
         self.data.join(format!("{name}.db"))
     }

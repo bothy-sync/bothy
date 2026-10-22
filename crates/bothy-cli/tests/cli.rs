@@ -17,13 +17,55 @@ impl Machine {
     }
 
     fn run(&self, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_bothy"))
-            .args(args)
+        self.run_with(args, &[], None)
+    }
+
+    /// Runs with extra environment variables and, optionally, text on stdin.
+    fn run_with(&self, args: &[&str], env: &[(&str, &str)], stdin: Option<&str>) -> Output {
+        use std::io::Write;
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_bothy"));
+        cmd.args(args)
             .env("BOTHY_HOME", &self.home)
             .env("BOTHY_TOKEN_STORE", "file")
             .env_remove("BOTHY_DB")
-            .output()
-            .expect("bothy runs")
+            .env_remove("BOTHY_PASSWORD")
+            .env_remove("BOTHY_NEW_PASSWORD")
+            .envs(env.iter().copied())
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        let mut child = cmd.spawn().expect("bothy runs");
+        let mut input = child.stdin.take().unwrap();
+        input.write_all(stdin.unwrap_or("").as_bytes()).unwrap();
+        drop(input);
+        child.wait_with_output().unwrap()
+    }
+
+    fn ok_with(&self, args: &[&str], env: &[(&str, &str)], stdin: Option<&str>) -> J {
+        let mut a = vec!["--json"];
+        a.extend_from_slice(args);
+        let out = self.run_with(&a, env, stdin);
+        assert!(
+            out.status.success(),
+            "bothy {args:?} failed ({:?}):\n{}",
+            out.status.code(),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        serde_json::from_slice(&out.stdout).unwrap()
+    }
+
+    fn fails_with(
+        &self,
+        args: &[&str],
+        env: &[(&str, &str)],
+        stdin: Option<&str>,
+    ) -> (i32, String) {
+        let out = self.run_with(args, env, stdin);
+        assert!(!out.status.success(), "bothy {args:?} should fail");
+        (
+            out.status.code().unwrap(),
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        )
     }
 
     fn ok(&self, args: &[&str]) -> String {
@@ -160,6 +202,10 @@ fn third_machine_joins_from_a_snapshot() {
 fn status_inspect_and_usage_errors() {
     let (_dir, a, _b, db_id) = setup();
     a.ok(&["put", "notes", "n1", "{}"]);
+    let (code, err) = a.fails_with(&["unlock"], &[("BOTHY_PASSWORD", "x")], None);
+    assert_eq!(code, 2);
+    assert!(err.contains("not encrypted"), "{err}");
+    assert_eq!(a.json(&["status"])["encrypted"], false);
     let st = a.json(&["status"]);
     assert_eq!(st["db_id"], db_id.as_str());
     assert_eq!(st["unsynced_ops"], 0, "an empty document creates no ops");
@@ -211,4 +257,114 @@ fn drive_databases_need_a_sign_in() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("auth login"));
     let st = m.json(&["auth", "status"]);
     assert_eq!(st["signed_in"], false);
+}
+
+fn remote_contains(dir: &Path, needle: &[u8]) -> bool {
+    std::fs::read_dir(dir).unwrap().any(|e| {
+        let p = e.unwrap().path();
+        if p.is_dir() {
+            remote_contains(&p, needle)
+        } else {
+            std::fs::read(&p)
+                .unwrap()
+                .windows(needle.len())
+                .any(|w| w == needle)
+        }
+    })
+}
+
+#[test]
+fn encrypted_database_from_init_to_password_change() {
+    let dir = tempfile::tempdir().unwrap();
+    let remote_dir = dir.path().join("remote");
+    let remote = format!("path:{}", remote_dir.display());
+    let (a, b, c) = (
+        Machine::new(dir.path(), "a"),
+        Machine::new(dir.path(), "b"),
+        Machine::new(dir.path(), "c"),
+    );
+    let pw = [("BOTHY_PASSWORD", "hunter2")];
+
+    let init = a.ok_with(
+        &["init", "--encrypt", "--remember", "--remote", &remote],
+        &pw,
+        None,
+    );
+    assert_eq!(
+        (init["encrypted"].clone(), init["key_remembered"].clone()),
+        (J::Bool(true), J::Bool(true))
+    );
+    a.ok(&["put", "notes", "n1", r#"{"t":"SECRET-MARKER-7"}"#]);
+    a.ok(&["sync"]); // the remembered key: no password needed
+    assert!(!remote_contains(&remote_dir, b"SECRET-MARKER-7"));
+    assert!(!remote_contains(&remote_dir, b"notes"));
+
+    // No password and no terminal: a usage error, not a hang.
+    let (code, err) = b.fails_with(&["join", "--remote", &remote], &[], None);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("BOTHY_PASSWORD"), "{err}");
+    let (code, err) = b.fails_with(
+        &["--password-stdin", "join", "--remote", &remote],
+        &[],
+        Some("wrong\n"),
+    );
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("password"), "{err}");
+    let joined = b.ok_with(
+        &["--password-stdin", "join", "--remote", &remote],
+        &[],
+        Some("hunter2\n"),
+    );
+    assert_eq!(joined["encrypted"], true);
+    assert_eq!(
+        b.json(&["get", "notes", "n1"]),
+        serde_json::json!({"t": "SECRET-MARKER-7"})
+    );
+
+    // Not remembered: locked, and syncing needs the password.
+    let st = b.json(&["status"]);
+    assert_eq!(
+        (st["encrypted"].clone(), st["locked"].clone()),
+        (J::Bool(true), J::Bool(true))
+    );
+    assert_eq!(b.fails_with(&["sync"], &[], None).0, 2);
+    b.ok_with(&["sync"], &pw, None);
+    b.ok_with(
+        &["--password-stdin", "unlock", "--remember"],
+        &[],
+        Some("hunter2\n"),
+    );
+    assert_eq!(b.json(&["status"])["locked"], false);
+
+    // Password change on a: the old one stops working, b's remembered key keeps working.
+    let changed = a.ok_with(
+        &["--password-stdin", "passwd"],
+        &[],
+        Some("hunter2\nnew-pass\n"),
+    );
+    assert_eq!(changed["changed"], true);
+    b.ok(&["put", "notes", "n2", r#"{"t":"from b"}"#]);
+    b.ok(&["sync"]);
+    a.ok(&["sync"]);
+    assert_eq!(
+        a.json(&["get", "notes", "n2"]),
+        serde_json::json!({"t": "from b"})
+    );
+    assert_eq!(c.fails_with(&["join", "--remote", &remote], &pw, None).0, 1);
+    c.ok_with(
+        &["join", "--remote", &remote],
+        &[("BOTHY_PASSWORD", "new-pass")],
+        None,
+    );
+
+    // lock forgets the key; the old password no longer unlocks.
+    assert_eq!(b.json(&["lock"])["forgotten"], true);
+    assert_eq!(b.json(&["status"])["locked"], true);
+    assert_eq!(b.fails_with(&["unlock"], &pw, None).0, 1);
+    b.ok_with(&["unlock"], &[("BOTHY_PASSWORD", "new-pass")], None);
+    assert_eq!(
+        a.fails_with(&["unlock"], &[], None).0,
+        2,
+        "unlock always checks a password, even with a remembered key"
+    );
 }
