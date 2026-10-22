@@ -1,4 +1,6 @@
-## Unreleased
+## 0.2.0
+
+First release with the sync engine. Requires a Rust toolchain to build (see the README).
 
 - The package is now a Flutter FFI plugin around the Rust core (flutter_rust_bridge 2.13,
   built with cargokit for Android, iOS, macOS, Linux and Windows).

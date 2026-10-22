@@ -207,4 +207,13 @@ pub enum Snapshot {
 pub enum Inspect {
     /// Remote files of this database, with sizes.
     Remote,
+    /// Download every remote file of this database and list those that contain the given
+    /// text as raw bytes, to check that an encrypted database leaks nothing. Exits 1 if any
+    /// file does. Compressed files are not decompressed, and the manifest (app id) and file
+    /// names are plain by design.
+    Scan {
+        /// Text to look for; repeat for several.
+        #[arg(required = true)]
+        text: Vec<String>,
+    },
 }

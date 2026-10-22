@@ -924,6 +924,48 @@ pub async fn run(mut ctx: Ctx, command: Command) -> CliResult<()> {
             Ok(())
         }
 
+        Command::Inspect(Inspect::Scan { text }) => {
+            let db = open(&ctx).await?;
+            let db_id = db
+                .db_id()
+                .await?
+                .ok_or_else(|| CliError::usage("database is not attached"))?;
+            let files = db.remote().list(&format!("{db_id}/")).await?;
+            let mut hits = Vec::new();
+            for f in &files {
+                let Some(bytes) = db.remote().get(&f.key).await? else {
+                    continue;
+                };
+                for t in &text {
+                    if !t.is_empty() && bytes.windows(t.len()).any(|w| w == t.as_bytes()) {
+                        hits.push(json!({"file": f.key, "text": t}));
+                    }
+                }
+            }
+            let clean = hits.is_empty();
+            ctx.out(json!({"files": files.len(), "found": hits}), || {
+                if clean {
+                    format!("scanned {} file(s): none contains the text", files.len())
+                } else {
+                    hits.iter()
+                        .map(|h| {
+                            format!(
+                                "{} contains {}",
+                                h["file"].as_str().unwrap_or(""),
+                                h["text"]
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                }
+            });
+            if clean {
+                Ok(())
+            } else {
+                Err(CliError::other("plain text found in remote files"))
+            }
+        }
+
         Command::Export { collection, all } => {
             let db = open(&ctx).await?;
             let names = match (collection, all) {

@@ -2,7 +2,7 @@
 
 **The `bothy` command: local-first databases that sync through your own Google Drive.**
 
-> ⚠️ **Early release (0.1).** Commands and the on-remote format can still change before 1.0.
+> ⚠️ **Early release (0.2).** Commands and the on-remote format can still change before 1.0.
 
 ```sh
 cargo install bothy-cli      # installs the `bothy` binary

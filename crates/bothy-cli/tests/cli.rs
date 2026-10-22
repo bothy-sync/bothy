@@ -202,6 +202,10 @@ fn third_machine_joins_from_a_snapshot() {
 fn status_inspect_and_usage_errors() {
     let (_dir, a, _b, db_id) = setup();
     a.ok(&["put", "notes", "n1", "{}"]);
+    // The scan reads raw bytes: it finds the app id in the (always plain) manifest.
+    let (code, err) = a.fails_with(&["inspect", "scan", "dev.bothy.cli"], &[], None);
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("plain text found"), "{err}");
     let (code, err) = a.fails_with(&["unlock"], &[("BOTHY_PASSWORD", "x")], None);
     assert_eq!(code, 2);
     assert!(err.contains("not encrypted"), "{err}");
@@ -298,6 +302,10 @@ fn encrypted_database_from_init_to_password_change() {
     a.ok(&["sync"]); // the remembered key: no password needed
     assert!(!remote_contains(&remote_dir, b"SECRET-MARKER-7"));
     assert!(!remote_contains(&remote_dir, b"notes"));
+    assert_eq!(
+        a.json(&["inspect", "scan", "SECRET-MARKER-7"])["found"],
+        serde_json::json!([])
+    );
 
     // No password and no terminal: a usage error, not a hang.
     let (code, err) = b.fails_with(&["join", "--remote", &remote], &[], None);

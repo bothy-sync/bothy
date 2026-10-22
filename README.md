@@ -2,7 +2,7 @@
 
 **Serverless, local-first sync engine that uses the user's own cloud storage as the transport.**
 
-> ⚠️ **Early release (0.1).** The API and the on-remote format can still change before 1.0. Keep
+> ⚠️ **Early release (0.2).** The API and the on-remote format can still change before 1.0. Keep
 > a backup of data you care about.
 
 In Scotland and northern England, a *bothy* is an unlocked mountain shelter that belongs to no
@@ -19,6 +19,11 @@ devices drop off and pick up files at a shared place.
   converges to the same state, and a delete is never undone by an older edit.
 - **Robust.** Idempotent uploads, crash-safe local transactions, snapshots and compaction,
   repair after long offline periods. Tested by a seeded multi-device fault simulation.
+- **End-to-end encryption (optional).** With a password, everything the database stores on
+  Drive is encrypted (XChaCha20-Poly1305, Argon2id). Changing the password does not re-encrypt
+  data, and a forgotten password cannot be recovered.
+- **Conflicts you can see.** Edits that lose to a newer edit of the same field are kept in a
+  conflict log.
 - **Open format.** A versioned on-remote format with [conformance vectors](spec/vectors) so other
   languages can interoperate.
 
@@ -31,11 +36,11 @@ cargo install bothy-cli
 bothy auth setup --client ~/Downloads/client_secret_desktop.json
 bothy auth login
 
-bothy init                                   # on the first machine
+bothy init --encrypt --remember              # on the first machine; asks for a password
 bothy put notes n1 '{"title": "Hello"}'
 bothy sync
 
-bothy join                                   # on the second machine (after auth)
+bothy join --remember                        # on the second machine (after auth)
 bothy get notes n1
 ```
 
@@ -60,19 +65,36 @@ db.sync().await?;
 See [`crates/bothy`](crates/bothy) for the API, and `bothy::blocking` for callers without an
 async runtime.
 
+## Quick start (Flutter)
+
+```dart
+await Bothy.initialize();
+final db = await Bothy.open(
+  path: '${dir.path}/notes.db',
+  appId: 'com.example.notes',
+  remote: BothyRemoteSpec.googleDriveAppData((refresh) => signIn.token(refresh)),
+  password: password,
+);
+await db.initOrJoin();
+await db.collection('notes').put('n1', {'title': 'Hello'});
+```
+
+See [`bindings/flutter`](bindings/flutter), and the demo app
+[`examples/flutter-notes`](examples/flutter-notes) (Android, iOS, macOS, Linux, Windows).
+
 ## Packages
 
 | Registry | Package | Path | Status |
 |---|---|---|---|
-| crates.io | [`bothy`](https://crates.io/crates/bothy) | [`crates/bothy`](crates/bothy) | 0.1: core engine |
-| crates.io | [`bothy-cli`](https://crates.io/crates/bothy-cli) | [`crates/bothy-cli`](crates/bothy-cli) | 0.1: `bothy` command |
-| pub.dev | [`bothy`](https://pub.dev/packages/bothy) | [`bindings/flutter`](bindings/flutter) | planned (0.2) |
+| crates.io | [`bothy`](https://crates.io/crates/bothy) | [`crates/bothy`](crates/bothy) | 0.2: core engine |
+| crates.io | [`bothy-cli`](https://crates.io/crates/bothy-cli) | [`crates/bothy-cli`](crates/bothy-cli) | 0.2: `bothy` command |
+| pub.dev | [`bothy`](https://pub.dev/packages/bothy) | [`bindings/flutter`](bindings/flutter) | 0.2: Flutter plugin |
 | PyPI | [`bothy`](https://pypi.org/project/bothy/) | [`bindings/python`](bindings/python) | planned (0.3) |
 | npm | [`@bothy-sync/core`](https://www.npmjs.com/package/@bothy-sync/core) | [`bindings/js`](bindings/js) | format types only |
 
 ## Roadmap
 
-- **0.2:** client-side encryption (XChaCha20-Poly1305, Argon2id) and the Flutter binding.
+- **0.2 (this release):** client-side encryption, the conflict log, and the Flutter binding.
 - **0.3:** Python binding and an embedded Linux example.
 - **0.4:** a faster path between online devices over WebRTC, with Drive as the fallback.
 

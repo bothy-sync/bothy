@@ -386,7 +386,7 @@ dependencies = [
 
 [[package]]
 name = "bothy"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "argon2",
  "async-trait",
@@ -411,7 +411,7 @@ dependencies = [
 
 [[package]]
 name = "bothy-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -432,7 +432,7 @@ dependencies = [
 
 [[package]]
 name = "bothy-conformance"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "blake3",

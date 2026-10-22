@@ -3,7 +3,7 @@ description: >-
   Serverless, local-first sync engine that uses the user's own Google Drive as the transport.
   Documents live in a local SQLite database and sync through the user's Drive, optionally
   end-to-end encrypted.
-version: 0.0.1
+version: 0.2.0
 homepage: https://github.com/bothy-sync/bothy
 repository: https://github.com/bothy-sync/bothy/tree/main/bindings/flutter
 issue_tracker: https://github.com/bothy-sync/bothy/issues

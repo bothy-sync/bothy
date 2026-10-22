@@ -2,7 +2,7 @@
 
 **Serverless, local-first sync engine that uses the user's own cloud storage as the transport.**
 
-> ⚠️ **Early release (0.1).** The API and the on-remote format can still change before 1.0.
+> ⚠️ **Early release (0.2).** The API and the on-remote format can still change before 1.0.
 
 Each device keeps a local SQLite database as the source of truth and works offline. Devices
 exchange immutable files through the user's own Google Drive (or a shared directory). There is
@@ -34,12 +34,37 @@ use `remote::drive::DriveRemote::appdata(provider)` for the hidden app folder (s
 `drive.appdata`), or `DriveRemote::folder(provider, "notes")` for a visible `Bothy/notes`
 folder (scope `drive.file`, also reachable from the device sign-in flow of headless boards).
 
+## Encryption
+
+```rust
+// First device: creates the database encrypted with this password.
+let db = Database::open(Config::new("notes.db", APP).encrypt(&password), remote).await?;
+// Other devices: join (or unlock on open) with the same password.
+let db = Database::open(Config::new("notes.db", APP).password(&password), remote).await?;
+// Keep the data key in secure storage to skip the password next time.
+let key = db.export_key()?;
+let db = Database::open(Config::new("notes.db", APP).key(key), remote).await?;
+```
+
+Segment bodies, snapshot chunks and `device.json` are encrypted with XChaCha20-Poly1305 under
+a random data key, which per-device key files wrap with an Argon2id key derived from the
+password.
+
+- **Wrong secret:** a wrong password fails with `ErrorKind::WrongPassword`.
+- **Locked database:** opened without a secret, an encrypted database is locked. Local reads
+  and writes still work; `sync` fails with `KeyRequired` until `unlock`.
+- **Password change:** `change_password` takes effect on every device, and kept data keys
+  stay valid.
+- **What stays visible:** file names, sizes, times and the app id. A forgotten password
+  cannot be recovered.
+
 ## How it merges
 
 - Every change gets a hybrid logical clock stamp. Fields merge separately, and the larger
   `(hlc, device)` stamp wins.
 - Edits to different fields of the same document both survive. On the same field the later
-  write wins; `Collection::conflicts` returns the losing value.
+  write wins; `Database::conflicts` (and `Collection::conflicts` per document) return the
+  losing value. `Config::conflict_log` sets how many records are kept, or turns the log off.
 - Deletes keep a tombstone. An edit made before the delete never revives the document; an edit
   made after it does, with only the new fields.
 - Nested objects and arrays are one value. Model concurrent lists as separate documents.
@@ -50,6 +75,7 @@ folder (scope `drive.file`, also reachable from the device sign-in flow of headl
 |---|---|---|
 | `drive` | yes | `remote::drive::DriveRemote` (reqwest over rustls with the ring provider; no OpenSSL) |
 | `blocking` | yes | `bothy::blocking`, a synchronous API with its own runtime |
+| `crypto` | yes | encrypted databases (`Config::encrypt`/`password`/`key`) |
 | `test-util` | no | `remote::faulty::FaultyRemote` for fault-injection tests |
 
 ## Links

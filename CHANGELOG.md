@@ -8,6 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.2.0]
+
+Encryption, the conflict log and the Flutter binding. On-remote format still
+`bothy_format = 1`: encrypted files use the encrypted flag that format 1 reserved, and
+key files are new files that 0.1 readers ignore.
+
 ### Added
 
 - Client-side encryption (`crypto` feature, on by default): XChaCha20-Poly1305 for segment
@@ -27,6 +33,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - CLI: `init --encrypt`, `unlock [--remember]`, `lock`, `passwd`, `--remember` on `init` and
   `join`, the global `--password-stdin` flag, and `BOTHY_PASSWORD` / `BOTHY_NEW_PASSWORD`.
   `status` shows whether the database is encrypted and locked.
+- CLI: `bothy inspect scan <text>...` downloads every remote file of the database and fails
+  if any contains the text, to check that an encrypted database leaks nothing.
 - Conformance vectors for the crypto primitives and encrypted segments and snapshots; a fuzz
   target for key files and sealed JSON; encrypted seeds in the simulation.
 
@@ -34,6 +42,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 - A segment with the encrypted flag and no key now fails with `KeyRequired` instead of
   `FormatTooNew` (vector `segment/invalid.json`, case `encrypted_without_key`).
+
+### Fixed
+
+- On Android the Drive backend verifies TLS against the Mozilla root store (`webpki-roots`);
+  the platform verifier needs JNI setup there and panicked on the first request.
 
 ## [0.1.0]
 
@@ -79,6 +92,7 @@ On-remote format `bothy_format = 1`.
 
 Name reservation: the hybrid logical clock type and the format version constant.
 
-[Unreleased]: https://github.com/bothy-sync/bothy/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/bothy-sync/bothy/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/bothy-sync/bothy/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/bothy-sync/bothy/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/bothy-sync/bothy/releases/tag/v0.0.1
