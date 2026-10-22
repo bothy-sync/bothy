@@ -1,0 +1,20 @@
+name: bothy_example
+description: "Minimal use of the bothy package: a counter shared through a folder."
+publish_to: 'none'
+version: 1.0.0
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  bothy:
+    path: ../
+  path_provider: ^2.1.5
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

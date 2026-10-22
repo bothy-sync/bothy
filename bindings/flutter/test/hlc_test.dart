@@ -1,5 +1,5 @@
 import 'package:bothy/bothy.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 const t = 1700000000000;
 
@@ -22,7 +22,7 @@ void main() {
       '018bcfe56800000',
       '018bcfe5680000011',
       '018BCFE568000001',
-      '018bcfe56800000g'
+      '018bcfe56800000g',
     ]) {
       expect(() => Hlc.parse(s), throwsFormatException, reason: s);
     }
