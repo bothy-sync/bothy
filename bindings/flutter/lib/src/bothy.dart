@@ -1,6 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi' show DynamicLibrary;
+import 'dart:io' show Platform;
 import 'dart:typed_data';
+
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show ExternalLibrary;
 
 import 'rust/api/bothy.dart';
 import 'rust/frb_generated.dart';
@@ -70,7 +75,17 @@ class Bothy {
 
   /// Loads the native library. Call once, before anything else.
   static Future<void> initialize() async {
-    if (!RustLib.instance.initialized) await RustLib.init();
+    if (RustLib.instance.initialized) return;
+    // On iOS and macOS the library is linked statically into the app; elsewhere (and in
+    // `flutter test` on a host) it is a separate file that the default loader finds.
+    final linked =
+        (Platform.isIOS || Platform.isMacOS) &&
+        DynamicLibrary.process().providesSymbol('frb_get_rust_content_hash');
+    await RustLib.init(
+      externalLibrary: linked
+          ? ExternalLibrary.process(iKnowHowToUseIt: true)
+          : null,
+    );
   }
 
   /// Opens (or creates) the local database at [path].
