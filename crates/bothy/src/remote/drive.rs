@@ -157,18 +157,38 @@ struct Response {
     body: Vec<u8>,
 }
 
+/// TLS for Android: rustls with ring, verifying against the `webpki-roots` store.
+#[cfg(target_os = "android")]
+fn android_tls() -> rustls::ClientConfig {
+    let roots = rustls::RootCertStore {
+        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+    };
+    let mut config = rustls::ClientConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .expect("ring supports the default TLS versions")
+    .with_root_certificates(roots)
+    .with_no_client_auth();
+    config.alpn_protocols = vec![b"http/1.1".to_vec()];
+    config
+}
+
 impl DriveRemote {
     /// A backend on `root`, authenticating with `tokens`.
     pub fn new(tokens: Arc<dyn AccessTokenProvider>, root: DriveRoot) -> Result<Self> {
         // reqwest uses the process-wide rustls provider; ring keeps cross-compiling simple.
         let _ = rustls::crypto::ring::default_provider().install_default();
-        let http = reqwest::Client::builder()
+        let builder = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(15))
-            .timeout(Duration::from_secs(120))
-            .build()
-            .map_err(|e| {
-                Error::new(ErrorKind::Internal, "cannot build HTTP client").with_source(e)
-            })?;
+            .timeout(Duration::from_secs(120));
+        // Elsewhere reqwest uses the platform verifier (the OS trust store). On Android that
+        // verifier needs JNI initialization by the host app, so use Mozilla's roots instead.
+        #[cfg(target_os = "android")]
+        let builder = builder.tls_backend_preconfigured(android_tls());
+        let http = builder.build().map_err(|e| {
+            Error::new(ErrorKind::Internal, "cannot build HTTP client").with_source(e)
+        })?;
         Ok(Self {
             http,
             tokens,
