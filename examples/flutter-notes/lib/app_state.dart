@@ -30,8 +30,10 @@ class AppState extends ChangeNotifier {
   bool syncing = false;
   StreamSubscription<BothySyncEvent>? _autoSync;
 
+  /// A local-folder run gets its own file, so it never mixes with the Drive database.
   static Future<String> databasePath() async =>
-      '${(await getApplicationSupportDirectory()).path}/notes.db';
+      '${(await getApplicationSupportDirectory()).path}/'
+      '${localRemote.isEmpty ? 'notes.db' : 'notes-local.db'}';
 
   /// The folder for `BOTHY_LOCAL_REMOTE`; a relative path is inside the app's support
   /// directory (sandboxed macOS apps cannot write elsewhere).
