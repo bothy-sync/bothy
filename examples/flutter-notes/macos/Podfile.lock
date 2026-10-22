@@ -1,0 +1,22 @@
+PODS:
+  - bothy (0.2.0):
+    - FlutterMacOS
+  - FlutterMacOS (1.0.0)
+
+DEPENDENCIES:
+  - bothy (from `Flutter/ephemeral/.symlinks/plugins/bothy/macos`)
+  - FlutterMacOS (from `Flutter/ephemeral`)
+
+EXTERNAL SOURCES:
+  bothy:
+    :path: Flutter/ephemeral/.symlinks/plugins/bothy/macos
+  FlutterMacOS:
+    :path: Flutter/ephemeral
+
+SPEC CHECKSUMS:
+  bothy: 16c1d98e2647fd6a6a2662ec42382268a853aa2c
+  FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
+
+PODFILE CHECKSUM: 1e95c36afbfd1cb6423ceca4de7a8e1b256fb6ac
+
+COCOAPODS: 1.17.0

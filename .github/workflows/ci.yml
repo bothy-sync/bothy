@@ -171,3 +171,41 @@ jobs:
           echo "$out" | grep -q 'Package has 1 warning' \
             && echo "$out" | grep -q 'dependency on "flutter_rust_bridge" should allow more than one version' \
             || exit 1
+  flutter-notes:
+    name: Flutter demo (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: examples/flutter-notes
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: bindings/flutter/rust
+      - name: Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libgtk-3-dev libsecret-1-dev
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed lib integration_test tool
+      - run: flutter analyze --fatal-infos
+      - name: Build
+        run: |
+          case "$RUNNER_OS" in
+            Linux) flutter build linux --debug && flutter build apk --debug ;;
+            macOS) flutter build macos --debug && flutter build ios --simulator --debug ;;
+            Windows) flutter build windows --debug ;;
+          esac
+      - name: Integration test (local folder remote)
+        if: runner.os == 'macOS'
+        run: flutter test integration_test -d macos --dart-define=BOTHY_LOCAL_REMOTE=it-remote
+
