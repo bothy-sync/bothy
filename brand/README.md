@@ -17,7 +17,7 @@ where whoever comes next finds what was left for them.
 | `favicon.svg` | site icon |
 | `app-icon.svg`, `app-icon-macos.svg` | sources of the demo app's icons (Android and iOS; macOS) |
 | `bothy-google-120.png` | OAuth consent screen logo (120 × 120) |
-| `app-icon-512.png`, `bothy-mark-1024.png` | raster versions |
+| `png/` | transparent PNGs of every file above, named `<name>-<width>.png` (marks 256–2048 px, lockups 800–3200 px, app icons 512 and 1024 px, favicon 32, 180 and 512 px) |
 
 Every file is a plain filled path, with no strokes and no live text, so it renders the same in
 any browser or design tool.
