@@ -163,10 +163,11 @@ struct TokenProvider {
 
 #[pymethods]
 impl TokenProvider {
-    /// Fresh tokens from `grant`, issued by the client in `client_file`.
+    /// Fresh tokens from `grant`, issued by the client in `client_file` (`None`: Bothy's
+    /// official client of the grant's kind).
     #[new]
-    fn new(client_file: &str, grant: &Grant) -> PyResult<Self> {
-        let client = bothy_oauth::Client::from_file(client_file).map_err(err)?;
+    fn new(client_file: Option<&str>, grant: &Grant) -> PyResult<Self> {
+        let client = client_or_official(client_file, &grant.inner.client)?;
         let tokens = bothy_oauth::RefreshingTokens::new(client, &grant.inner).map_err(err)?;
         Ok(Self {
             inner: Arc::new(tokens),
@@ -240,6 +241,18 @@ impl Remote {
     }
 }
 
+/// The client in `client_file`, or Bothy's official client of `kind` (`desktop` or `device`).
+fn client_or_official(client_file: Option<&str>, kind: &str) -> PyResult<bothy_oauth::Client> {
+    match client_file {
+        Some(file) => bothy_oauth::Client::from_file(file).map_err(err),
+        None => bothy_oauth::official::client(kind).ok_or_else(|| {
+            invalid(
+                "this build has no official Bothy OAuth client; pass the client JSON file of your own Google Cloud project",
+            )
+        }),
+    }
+}
+
 /// A Google sign-in: the long-lived grant. Its repr never shows the token.
 #[pyclass(frozen, module = "bothy._native")]
 struct Grant {
@@ -278,8 +291,9 @@ impl Grant {
 /// Device sign-in: calls `show(verification_url, user_code)`, then waits until the user
 /// approves on another device. Grants only `drive.file` (Google rejects `drive.appdata` here).
 #[pyfunction]
-fn device_login(py: Python<'_>, client_file: &str, show: Py<PyAny>) -> PyResult<Grant> {
-    let client = bothy_oauth::Client::from_file(client_file).map_err(err)?;
+#[pyo3(signature = (client_file, show))]
+fn device_login(py: Python<'_>, client_file: Option<&str>, show: Py<PyAny>) -> PyResult<Grant> {
+    let client = client_or_official(client_file, "device")?;
     let shown: Arc<Mutex<Option<PyErr>>> = Arc::default();
     let s = shown.clone();
     let grant = py.detach(|| {
@@ -305,11 +319,11 @@ fn device_login(py: Python<'_>, client_file: &str, show: Py<PyAny>) -> PyResult<
 #[pyo3(signature = (client_file, show, scopes = None))]
 fn loopback_login(
     py: Python<'_>,
-    client_file: &str,
+    client_file: Option<&str>,
     show: Py<PyAny>,
     scopes: Option<Vec<String>>,
 ) -> PyResult<Grant> {
-    let client = bothy_oauth::Client::from_file(client_file).map_err(err)?;
+    let client = client_or_official(client_file, "desktop")?;
     let scopes = scopes.unwrap_or_else(|| {
         vec![
             bothy_oauth::SCOPE_APPDATA.into(),

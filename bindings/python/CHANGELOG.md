@@ -1,3 +1,9 @@
+## Unreleased
+
+- `bothy.auth.device_login()`, `loopback_login()` and `TokenProvider(None, grant)` use Bothy's
+  official OAuth clients when no client file is given. Release wheels include them; a build
+  from source has none and needs a client file of your own Cloud project.
+
 ## 0.4.0
 
 Built on `bothy` 0.4.0.

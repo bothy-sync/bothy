@@ -155,7 +155,8 @@ pub enum SetupWhat {
 
 #[derive(Subcommand, Debug)]
 pub enum Auth {
-    /// Store the OAuth client JSON files of your own Google Cloud project.
+    /// Store the OAuth client JSON files of your own Google Cloud project (without them, Bothy's
+    /// official clients are used).
     Setup {
         /// "Desktop app" client, for browser sign-in.
         #[arg(long)]
@@ -163,6 +164,9 @@ pub enum Auth {
         /// "TVs and Limited Input devices" client, for `auth login --device`.
         #[arg(long)]
         device_client: Option<String>,
+        /// Forget the stored clients and use Bothy's official ones again.
+        #[arg(long, conflicts_with_all = ["client", "device_client"])]
+        official: bool,
     },
     /// Sign in with Google.
     Login {

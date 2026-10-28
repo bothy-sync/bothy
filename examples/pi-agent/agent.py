@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bothy robot agent: takes missions from a phone and sends telemetry back, with no server.
 
-    agent.py login --client client_tv.json          # once: device sign-in, code on a phone
+    agent.py login                                   # once: device sign-in, code on a phone
     BOTHY_PASSWORD=... agent.py run --folder robot   # first run joins (or creates) the database
     agent.py run --folder robot                      # later runs use the kept key
     agent.py status
@@ -94,9 +94,10 @@ class Agent:
         if self.args.remote_dir:
             return bothy.FolderRemote(self.args.remote_dir)
         grant = bothy.auth.Grant.load(self.path("token.json"))
+        if grant is None:
+            sys.exit("not signed in; run `agent.py login` first")
+        # No stored client file: the sign-in used Bothy's official client.
         client = read_first(self.path("client"))
-        if grant is None or client is None:
-            sys.exit("not signed in; run `agent.py login --client <client.json>` first")
         return bothy.DriveRemote.folder(self.args.folder, bothy.auth.TokenProvider(client, grant))
 
     def open(self):
@@ -208,10 +209,13 @@ def _describe(status):
 def cmd_login(args):
     home = os.path.expanduser(args.home)
     os.makedirs(home, mode=0o700, exist_ok=True)
-    client = os.path.abspath(args.client)
+    client = os.path.abspath(args.client) if args.client else None
     grant = bothy.auth.device_login(client)
     grant.save(os.path.join(home, "token.json"))
-    write_private(os.path.join(home, "client"), client.encode())
+    if client:
+        write_private(os.path.join(home, "client"), client.encode())
+    elif os.path.exists(os.path.join(home, "client")):
+        os.remove(os.path.join(home, "client"))
     log("signed_in", scopes=grant.scopes)
 
 
@@ -232,8 +236,9 @@ def main(argv=None):
                    help="directory for the database, the sign-in and the key")
     sub = p.add_subparsers(dest="cmd", required=True)
     login = sub.add_parser("login", help="device sign-in (once)")
-    login.add_argument("--client", required=True,
-                       help='"TVs and Limited Input devices" OAuth client JSON')
+    login.add_argument("--client",
+                       help='"TVs and Limited Input devices" OAuth client JSON of your own Cloud '
+                            "project (default: Bothy's official client)")
     for name in ("run", "status"):
         s = sub.add_parser(name)
         s.add_argument("--folder", default="robot", help="Drive folder Bothy/<folder>")

@@ -1,12 +1,13 @@
 """Google sign-in for apps and agents that run their own OAuth.
 
-Use OAuth clients of your own Google Cloud project; every client of one project sees the same
-Drive files. On a machine without a browser:
+Without a client file, Bothy's official OAuth clients are used (the consent screen shows
+"Bothy"). Apps of your own pass the client JSON files of their own Google Cloud project; every
+device of one database must use clients of the same project. On a machine without a browser:
 
->>> grant = bothy.auth.device_login("client_tv.json")            # doctest: +SKIP
+>>> grant = bothy.auth.device_login()                              # doctest: +SKIP
 On a phone or computer, open https://www.google.com/device and enter: ABCD-EFGH
 >>> grant.save("token.json")                                       # doctest: +SKIP
->>> tokens = bothy.auth.TokenProvider("client_tv.json", grant)     # doctest: +SKIP
+>>> tokens = bothy.auth.TokenProvider(None, grant)                 # doctest: +SKIP
 >>> remote = bothy.DriveRemote.folder("robot", tokens)             # doctest: +SKIP
 
 The device flow only grants ``drive.file``, so headless devices use ``DriveRemote.folder``.
@@ -34,14 +35,17 @@ def _open_browser(url: str) -> None:
     webbrowser.open(url)
 
 
-def device_login(client_file: str, show: Callable[[str, str], None] = _print_code) -> Grant:
+def device_login(client_file: Optional[str] = None,
+                 show: Callable[[str, str], None] = _print_code) -> Grant:
     """Device sign-in: ``show(url, code)`` tells the user what to enter where, then this waits
-    until they approve. Needs a "TVs and Limited Input devices" client."""
+    until they approve. ``client_file`` is a "TVs and Limited Input devices" client; ``None``
+    uses Bothy's official one."""
     return _native_device_login(client_file, show)
 
 
-def loopback_login(client_file: str, show: Callable[[str], None] = _open_browser,
+def loopback_login(client_file: Optional[str] = None, show: Callable[[str], None] = _open_browser,
                    scopes: Optional[List[str]] = None) -> Grant:
-    """Browser sign-in with a ``127.0.0.1`` redirect and PKCE. Needs a "Desktop app" client."""
+    """Browser sign-in with a ``127.0.0.1`` redirect and PKCE. ``client_file`` is a "Desktop app"
+    client; ``None`` uses Bothy's official one."""
     return _native_loopback_login(client_file, show, scopes)
 

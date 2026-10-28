@@ -25,12 +25,17 @@ bothy put missions m1 '{"goal": "dock", "state": "new"}' && bothy sync
 You need Python ≥ 3.9 and the `bothy` package (`pip install bothy`, or unpack a wheel and set
 `PYTHONPATH`).
 
-1. **Sign in once.** The board has no browser, so use a "TVs and Limited Input devices"
-   OAuth client of the same Cloud project as the phone app:
+1. **Sign in once.** The board has no browser, so it uses the device flow: it shows a code to
+   enter on your phone.
 
    ```sh
-   python3 agent.py login --client client_tv.json   # shows a code to enter on your phone
+   python3 agent.py login
    ```
+
+   This uses Bothy's official OAuth client, like the Bothy CLI and the Bothy Notes app. If the
+   phone app uses clients of your own Cloud project, pass that project's "TVs and Limited
+   Input devices" client instead (`--client client_tv.json`): every device of a database must
+   sign in through the same project.
 
 2. **First run.** It joins the database the phone created, or creates it:
 

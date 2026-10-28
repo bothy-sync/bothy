@@ -205,6 +205,19 @@ class DatabaseTest(unittest.TestCase):
         with self.assertRaises(bothy.InvalidInputError):
             bothy.DriveRemote.folder("robot", "not callable")
 
+    def test_token_provider_defaults_to_the_official_client(self):
+        path = os.path.join(self.env.dir, "token.json")
+        with open(path, "w") as f:
+            json.dump({"refresh_token": "r", "scopes": [], "client": "device"}, f)
+        grant = bothy.auth.Grant.load(path)
+        try:
+            bothy.auth.TokenProvider(None, grant)
+        except bothy.InvalidInputError as e:
+            # A build without the official client (the secret is given only to release builds).
+            self.assertIn("official", str(e))
+        with self.assertRaises(bothy.InvalidInputError):
+            bothy.auth.TokenProvider(os.path.join(self.env.dir, "missing.json"), grant)
+
     @unittest.skipUnless(os.environ.get("BOTHY_CLI"), "set BOTHY_CLI to the bothy binary")
     def test_cli_and_python_share_a_database(self):
         cli = os.environ["BOTHY_CLI"]
