@@ -1,0 +1,4 @@
+# `cross` builds in a container; release builds need the official OAuth client secrets inside it
+# (see crates/bothy-oauth/src/official.rs). Unset, they stay unset.
+[build.env]
+passthrough = ["BOTHY_OFFICIAL_DESKTOP_SECRET", "BOTHY_OFFICIAL_DEVICE_SECRET"]
