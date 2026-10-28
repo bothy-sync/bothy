@@ -52,6 +52,17 @@ impl Paths {
     pub fn db_file(&self, name: &str) -> PathBuf {
         self.data.join(format!("{name}.db"))
     }
+
+    /// Tells this home's keyring entries apart from other homes on the machine: `None` for the
+    /// default home, the absolute config directory otherwise (e.g. under `BOTHY_HOME`).
+    pub fn keyring_scope(&self) -> Option<String> {
+        let default = platform_dirs().map(|(config, _)| config.join("bothy"));
+        if default.as_deref() == Some(self.config.as_path()) {
+            return None;
+        }
+        let dir = std::path::absolute(&self.config).unwrap_or_else(|_| self.config.clone());
+        Some(dir.display().to_string())
+    }
 }
 
 fn env_dir(name: &str) -> Option<PathBuf> {
@@ -231,6 +242,29 @@ pub fn check_db_name(name: &str) -> CliResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn homes_have_their_own_keyring_scope() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = Paths {
+            config: dir.path().join("a/config"),
+            data: dir.path().join("a/data"),
+        };
+        let b = Paths {
+            config: dir.path().join("b/config"),
+            data: dir.path().join("b/data"),
+        };
+        let (sa, sb) = (a.keyring_scope().unwrap(), b.keyring_scope().unwrap());
+        assert_ne!(sa, sb);
+        assert!(sa.ends_with("config"), "{sa}");
+        if let Some((config, _)) = platform_dirs() {
+            let default = Paths {
+                config: config.join("bothy"),
+                data: dir.path().into(),
+            };
+            assert_eq!(default.keyring_scope(), None);
+        }
+    }
 
     #[test]
     fn remote_specs() {

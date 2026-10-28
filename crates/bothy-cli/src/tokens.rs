@@ -15,7 +15,16 @@ const SERVICE: &str = "dev.bothy.cli";
 const ACCOUNT: &str = "google";
 
 fn store(paths: &Paths) -> TokenStore {
-    TokenStore::new(SERVICE, ACCOUNT, paths.token_file())
+    TokenStore::new(SERVICE, &account(paths), paths.token_file())
+}
+
+/// The keyring account of the grant: `google` for the default home (as before), and
+/// `google:<config dir>` for any other, so that signing in from one home leaves the others alone.
+pub fn account(paths: &Paths) -> String {
+    match paths.keyring_scope() {
+        None => ACCOUNT.to_owned(),
+        Some(scope) => format!("{ACCOUNT}:{scope}"),
+    }
 }
 
 fn file_only() -> bool {

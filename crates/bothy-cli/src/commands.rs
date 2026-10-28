@@ -1600,32 +1600,52 @@ async fn auth(ctx: &Ctx, a: Auth) -> CliResult<()> {
         }
         Auth::Status => {
             let grant = tokens::load(&ctx.paths);
-            let clients: Vec<&str> = ["desktop", "device"]
+            // The stored client files, with the Cloud project each belongs to (never the secret).
+            let clients: Vec<(&str, Option<setup::ClientFile>)> = ["desktop", "device"]
                 .into_iter()
-                .filter(|k| ctx.paths.client_file(k).exists())
+                .filter_map(|k| {
+                    let bytes = std::fs::read(ctx.paths.client_file(k)).ok()?;
+                    Some((k, setup::inspect(&bytes).ok()))
+                })
                 .collect();
+            let describe = |kind: &str, file: &Option<setup::ClientFile>| match file {
+                Some(f) => format!(
+                    "{kind} {} (project {})",
+                    f.id,
+                    f.project_id.as_deref().unwrap_or("unknown")
+                ),
+                None => format!("{kind} (unreadable client file)"),
+            };
+            let listed = if clients.is_empty() {
+                "none".to_owned()
+            } else {
+                clients
+                    .iter()
+                    .map(|(k, f)| describe(k, f))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
             ctx.out(
                 json!({
                     "signed_in": grant.is_some(),
                     "client": grant.as_ref().map(|g| g.client.clone()),
                     "scopes": grant.as_ref().map(|g| g.scopes.clone()),
-                    "clients_configured": clients,
+                    "clients_configured": clients.iter().map(|(k, _)| *k).collect::<Vec<_>>(),
+                    "clients": clients.iter().map(|(k, f)| json!({
+                        "kind": k,
+                        "client_id": f.as_ref().map(|f| f.id.clone()),
+                        "project": f.as_ref().and_then(|f| f.project_id.clone()),
+                    })).collect::<Vec<_>>(),
+                    "keyring_account": tokens::account(&ctx.paths),
                 }),
                 || match &grant {
                     Some(g) => format!(
-                        "signed in with the {} client; appdata: {}, folder: {}",
+                        "signed in with the {} client; appdata: {}, folder: {}\nclients: {listed}",
                         g.client,
                         if g.has(SCOPE_APPDATA) { "yes" } else { "no" },
                         if g.has(SCOPE_FILE) { "yes" } else { "no" }
                     ),
-                    None => format!(
-                        "not signed in; clients configured: {}",
-                        if clients.is_empty() {
-                            "none".to_owned()
-                        } else {
-                            clients.join(", ")
-                        }
-                    ),
+                    None => format!("not signed in; clients configured: {listed}"),
                 },
             );
             Ok(())

@@ -520,7 +520,7 @@ fn setup_google_checks_and_stores_the_client() {
     let ok: Vec<String> = args("my-sync-1", &desktop);
     let r = m.json(&ok.iter().map(String::as_str).collect::<Vec<_>>());
     assert_eq!(r["client_id"], id, "{r}");
-    assert!(m.ok(&["auth", "status"]).contains(id) || m.home.join("config").exists());
+    assert!(m.ok(&["auth", "status"]).contains("(project my-sync-1)"));
 
     let wrong_kind = args("my-sync-1", &web);
     let (code, err) = m.fails_with(
@@ -550,4 +550,52 @@ fn setup_google_checks_and_stores_the_client() {
         None,
     );
     assert_eq!(code, 2);
+}
+
+#[test]
+fn auth_status_shows_the_project_of_each_client() {
+    let dir = tempfile::tempdir().unwrap();
+    let m = Machine::new(dir.path(), "m");
+    let desktop = dir.path().join("desktop.json");
+    std::fs::write(
+        &desktop,
+        r#"{"installed":{"client_id":"1-d.apps.googleusercontent.com","client_secret":"desk-secret","project_id":"my-sync-1","redirect_uris":["http://localhost"]}}"#,
+    )
+    .unwrap();
+    let tv = dir.path().join("tv.json");
+    std::fs::write(
+        &tv,
+        r#"{"installed":{"client_id":"1-t.apps.googleusercontent.com","client_secret":"tv-secret","project_id":"other-proj"}}"#,
+    )
+    .unwrap();
+    let (d, t) = (desktop.display().to_string(), tv.display().to_string());
+    m.ok(&["auth", "setup", "--client", &d, "--device-client", &t]);
+
+    let st = m.json(&["auth", "status"]);
+    assert_eq!(st["signed_in"], false);
+    assert_eq!(st["clients"][0]["kind"], "desktop", "{st}");
+    assert_eq!(st["clients"][0]["project"], "my-sync-1", "{st}");
+    assert_eq!(
+        st["clients"][1]["client_id"], "1-t.apps.googleusercontent.com",
+        "{st}"
+    );
+    assert_eq!(st["clients"][1]["project"], "other-proj", "{st}");
+    // A BOTHY_HOME gets its own keyring entry.
+    assert!(
+        st["keyring_account"]
+            .as_str()
+            .unwrap()
+            .starts_with("google:"),
+        "{st}"
+    );
+
+    let text = m.ok(&["auth", "status"]);
+    assert!(
+        text.contains("desktop 1-d.apps.googleusercontent.com (project my-sync-1)"),
+        "{text}"
+    );
+    assert!(text.contains("(project other-proj)"), "{text}");
+    for out in [text, st.to_string()] {
+        assert!(!out.contains("secret"), "{out}");
+    }
 }
