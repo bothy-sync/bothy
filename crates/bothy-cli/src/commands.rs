@@ -181,7 +181,7 @@ fn remote_for(ctx: &Ctx, spec: &RemoteSpec) -> CliResult<Arc<dyn RemoteStore>> {
                     "the current sign-in lacks drive.file; run `bothy auth login` again",
                 ));
             }
-            let client = tokens::client(&ctx.paths, &grant.client)?;
+            let client = tokens::client_for(&ctx.paths, &grant)?;
             let provider = Arc::new(tokens::CliTokens::new(client, &grant)?);
             Arc::new(match spec {
                 RemoteSpec::AppData => DriveRemote::appdata(provider)?,
@@ -1549,10 +1549,20 @@ async fn auth(ctx: &Ctx, a: Auth) -> CliResult<()> {
         Auth::Setup {
             client,
             device_client,
+            official,
         } => {
+            if official {
+                for kind in ["desktop", "device"] {
+                    let _ = std::fs::remove_file(ctx.paths.client_file(kind));
+                }
+                ctx.out(json!({"clients": "official"}), || {
+                    "using Bothy's official clients; sign in again with `bothy auth login`".into()
+                });
+                return Ok(());
+            }
             if client.is_none() && device_client.is_none() {
                 return Err(CliError::usage(
-                    "give --client <file> and/or --device-client <file>",
+                    "give --client <file> and/or --device-client <file>, or --official",
                 ));
             }
             for (kind, file) in [("desktop", client), ("device", device_client)] {
@@ -1600,52 +1610,83 @@ async fn auth(ctx: &Ctx, a: Auth) -> CliResult<()> {
         }
         Auth::Status => {
             let grant = tokens::load(&ctx.paths);
-            // The stored client files, with the Cloud project each belongs to (never the secret).
-            let clients: Vec<(&str, Option<setup::ClientFile>)> = ["desktop", "device"]
-                .into_iter()
-                .filter_map(|k| {
-                    let bytes = std::fs::read(ctx.paths.client_file(k)).ok()?;
-                    Some((k, setup::inspect(&bytes).ok()))
-                })
-                .collect();
-            let describe = |kind: &str, file: &Option<setup::ClientFile>| match file {
-                Some(f) => format!(
-                    "{kind} {} (project {})",
-                    f.id,
-                    f.project_id.as_deref().unwrap_or("unknown")
-                ),
-                None => format!("{kind} (unreadable client file)"),
-            };
+            // Each kind's client: a stored file (with its Cloud project; never the secret), else
+            // the official one if this build has it.
+            struct Shown {
+                kind: &'static str,
+                id: Option<String>,
+                project: Option<String>,
+                official: bool,
+            }
+            let mut own = Vec::new();
+            let mut clients = Vec::new();
+            for kind in ["desktop", "device"] {
+                if let Ok(bytes) = std::fs::read(ctx.paths.client_file(kind)) {
+                    own.push(kind);
+                    let f = setup::inspect(&bytes).ok();
+                    clients.push(Shown {
+                        kind,
+                        id: f.as_ref().map(|f| f.id.clone()),
+                        project: f.and_then(|f| f.project_id),
+                        official: false,
+                    });
+                } else if let Some(c) = bothy_oauth::official::client(kind) {
+                    clients.push(Shown {
+                        kind,
+                        id: Some(c.id),
+                        project: Some(bothy_oauth::official::PROJECT.to_owned()),
+                        official: true,
+                    });
+                }
+            }
             let listed = if clients.is_empty() {
                 "none".to_owned()
             } else {
                 clients
                     .iter()
-                    .map(|(k, f)| describe(k, f))
+                    .map(|c| {
+                        let id = c.id.as_deref().unwrap_or("(unreadable client file)");
+                        let project = c.project.as_deref().unwrap_or("unknown");
+                        let whose = if c.official { "Bothy official, " } else { "" };
+                        format!("{} {id} ({whose}project {project})", c.kind)
+                    })
                     .collect::<Vec<_>>()
                     .join(", ")
             };
+            // A sign-in made with another client than the current one cannot be refreshed.
+            let stale = grant.as_ref().is_some_and(|g| {
+                let current = clients.iter().find(|c| c.kind == g.client);
+                g.client_id.is_some() && current.and_then(|c| c.id.as_ref()) != g.client_id.as_ref()
+            });
             ctx.out(
                 json!({
                     "signed_in": grant.is_some(),
                     "client": grant.as_ref().map(|g| g.client.clone()),
+                    "client_id": grant.as_ref().and_then(|g| g.client_id.clone()),
                     "scopes": grant.as_ref().map(|g| g.scopes.clone()),
-                    "clients_configured": clients.iter().map(|(k, _)| *k).collect::<Vec<_>>(),
-                    "clients": clients.iter().map(|(k, f)| json!({
-                        "kind": k,
-                        "client_id": f.as_ref().map(|f| f.id.clone()),
-                        "project": f.as_ref().and_then(|f| f.project_id.clone()),
+                    "needs_login": stale,
+                    "clients_configured": own,
+                    "clients": clients.iter().map(|c| json!({
+                        "kind": c.kind,
+                        "client_id": c.id,
+                        "project": c.project,
+                        "official": c.official,
                     })).collect::<Vec<_>>(),
                     "keyring_account": tokens::account(&ctx.paths),
                 }),
                 || match &grant {
                     Some(g) => format!(
-                        "signed in with the {} client; appdata: {}, folder: {}\nclients: {listed}",
+                        "signed in with the {} client; appdata: {}, folder: {}\nclients: {listed}{}",
                         g.client,
                         if g.has(SCOPE_APPDATA) { "yes" } else { "no" },
-                        if g.has(SCOPE_FILE) { "yes" } else { "no" }
+                        if g.has(SCOPE_FILE) { "yes" } else { "no" },
+                        if stale {
+                            "\nthe sign-in was made with another client; run `bothy auth login` again"
+                        } else {
+                            ""
+                        }
                     ),
-                    None => format!("not signed in; clients configured: {listed}"),
+                    None => format!("not signed in; clients: {listed}"),
                 },
             );
             Ok(())

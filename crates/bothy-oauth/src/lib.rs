@@ -22,6 +22,8 @@ use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+pub mod official;
+
 /// The hidden per-app folder (`appDataFolder`). Not available through the device flow.
 pub const SCOPE_APPDATA: &str = "https://www.googleapis.com/auth/drive.appdata";
 /// Files the app created, such as the visible `Bothy/<name>` folders.
@@ -104,6 +106,8 @@ pub struct Grant {
     pub scopes: Vec<String>,
     /// Which client issued it: `desktop` (loopback) or `device` (device flow).
     pub client: String,
+    /// The id of that client. `None` for grants stored before 0.5.
+    pub client_id: Option<String>,
 }
 
 impl std::fmt::Debug for Grant {
@@ -111,6 +115,7 @@ impl std::fmt::Debug for Grant {
         f.debug_struct("Grant")
             .field("scopes", &self.scopes)
             .field("client", &self.client)
+            .field("client_id", &self.client_id)
             .finish_non_exhaustive()
     }
 }
@@ -123,8 +128,13 @@ impl Grant {
 
     /// The stored form.
     pub fn to_json(&self) -> String {
-        json!({"refresh_token": self.refresh_token, "scopes": self.scopes, "client": self.client})
-            .to_string()
+        json!({
+            "refresh_token": self.refresh_token,
+            "scopes": self.scopes,
+            "client": self.client,
+            "client_id": self.client_id,
+        })
+        .to_string()
     }
 
     /// Parses the stored form.
@@ -138,6 +148,7 @@ impl Grant {
                 .filter_map(|v| v.as_str().map(str::to_owned))
                 .collect(),
             client: j["client"].as_str()?.to_owned(),
+            client_id: j["client_id"].as_str().map(str::to_owned),
         })
     }
 }
@@ -193,7 +204,7 @@ async fn post_form(http: &reqwest::Client, url: &str, form: &[(&str, &str)]) -> 
     Ok((status, serde_json::from_slice(&body).unwrap_or(J::Null)))
 }
 
-fn grant_from(j: &J, client: &str) -> Result<Grant> {
+fn grant_from(j: &J, kind: &str, client: &Client) -> Result<Grant> {
     let refresh = j["refresh_token"].as_str().ok_or_else(|| {
         auth_error("Google returned no refresh token; sign out and sign in again")
     })?;
@@ -205,7 +216,8 @@ fn grant_from(j: &J, client: &str) -> Result<Grant> {
             .split(' ')
             .map(str::to_owned)
             .collect(),
-        client: client.to_owned(),
+        client: kind.to_owned(),
+        client_id: Some(client.id.clone()),
     })
 }
 
@@ -310,7 +322,7 @@ pub async fn loopback_login(
             oauth_error(&j)
         )));
     }
-    grant_from(&j, "desktop")
+    grant_from(&j, "desktop", client)
 }
 
 /// What the user must do to approve a device sign-in.
@@ -380,7 +392,7 @@ pub async fn device_login(client: &Client, show: impl FnOnce(&DeviceCode)) -> Re
         )
         .await?;
         if status == 200 {
-            return grant_from(&j, "device");
+            return grant_from(&j, "device", client);
         }
         match j["error"].as_str() {
             Some("authorization_pending") => {}
@@ -648,6 +660,7 @@ mod tests {
             refresh_token: "REFRESH".into(),
             scopes: vec![SCOPE_FILE.into()],
             client: "device".into(),
+            client_id: Some("id".into()),
         };
         let t = RefreshingTokens::new(c.clone(), &g).unwrap();
         let all = format!("{c:?}{g:?}{t:?}");
@@ -663,12 +676,21 @@ mod tests {
             refresh_token: "r".into(),
             scopes: vec!["a".into(), "b".into()],
             client: "desktop".into(),
+            client_id: Some("1-d.apps.googleusercontent.com".into()),
         };
         let back = Grant::from_json(&g.to_json()).unwrap();
         assert_eq!(
-            (back.refresh_token, back.scopes, back.client),
-            (g.refresh_token.clone(), g.scopes.clone(), g.client.clone())
+            (back.refresh_token, back.scopes, back.client, back.client_id),
+            (
+                g.refresh_token.clone(),
+                g.scopes.clone(),
+                g.client.clone(),
+                g.client_id.clone()
+            )
         );
+        // Grants stored before 0.5 have no client id.
+        let old = Grant::from_json(r#"{"refresh_token":"r","scopes":[],"client":"device"}"#);
+        assert_eq!(old.unwrap().client_id, None);
 
         let dir = tempfile::tempdir().unwrap();
         let store = TokenStore::file_only(dir.path().join("t/token.json"));

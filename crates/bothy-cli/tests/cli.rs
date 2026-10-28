@@ -599,3 +599,37 @@ fn auth_status_shows_the_project_of_each_client() {
         assert!(!out.contains("secret"), "{out}");
     }
 }
+
+#[test]
+fn switching_clients_asks_for_a_new_sign_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let m = Machine::new(dir.path(), "m");
+    let desktop = dir.path().join("desktop.json");
+    std::fs::write(
+        &desktop,
+        r#"{"installed":{"client_id":"1-d.apps.googleusercontent.com","client_secret":"s","project_id":"my-sync-1","redirect_uris":["http://localhost"]}}"#,
+    )
+    .unwrap();
+    m.ok(&["auth", "setup", "--client", &desktop.display().to_string()]);
+    // A sign-in made with another client, as after switching from the official client.
+    std::fs::write(
+        m.home.join("config/token.json"),
+        r#"{"refresh_token":"r","scopes":["https://www.googleapis.com/auth/drive.file"],"client":"desktop","client_id":"2-x.apps.googleusercontent.com"}"#,
+    )
+    .unwrap();
+    let st = m.json(&["auth", "status"]);
+    assert_eq!(st["needs_login"], true, "{st}");
+    assert!(
+        m.ok(&["auth", "status"])
+            .contains("run `bothy auth login` again")
+    );
+
+    // --official forgets the stored clients.
+    let r = m.json(&["auth", "setup", "--official"]);
+    assert_eq!(r["clients"], "official", "{r}");
+    assert!(!m.home.join("config/client-desktop.json").exists());
+    let st = m.json(&["auth", "status"]);
+    assert_eq!(st["clients_configured"], serde_json::json!([]), "{st}");
+    let official = st["clients"].as_array().unwrap();
+    assert!(official.iter().all(|c| c["official"] == true), "{st}");
+}

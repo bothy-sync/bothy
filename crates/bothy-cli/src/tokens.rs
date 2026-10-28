@@ -57,14 +57,33 @@ pub fn clear(paths: &Paths) {
     store(paths).clear();
 }
 
-/// The stored client of a kind (`desktop` or `device`).
+/// The client of a kind (`desktop` or `device`): the one stored with `auth setup` or
+/// `setup google`, else Bothy's official client when this build has it.
 pub fn client(paths: &Paths, kind: &str) -> CliResult<Client> {
-    let file = paths.client_file(kind);
-    let bytes = std::fs::read(&file).map_err(|_| {
-        let flag = if kind == "device" { "--device-client" } else { "--client" };
-        CliError::auth(format!(
-            "no {kind} OAuth client configured; run `bothy auth setup {flag} <client.json>` (see `bothy-cli` README)"
-        ))
-    })?;
-    Ok(Client::from_json(&bytes)?)
+    match std::fs::read(paths.client_file(kind)) {
+        Ok(bytes) => Ok(Client::from_json(&bytes)?),
+        Err(_) => bothy_oauth::official::client(kind).ok_or_else(|| {
+            let flag = if kind == "device" {
+                "--device-client"
+            } else {
+                "--client"
+            };
+            CliError::auth(format!(
+                "this build has no official Bothy OAuth client and no {kind} client is configured; \
+                 run `bothy setup google`, or `bothy auth setup {flag} <client.json>`"
+            ))
+        }),
+    }
+}
+
+/// The client that issued `grant`, checked against the current one: after switching between
+/// the official client and one's own, the old sign-in cannot be refreshed.
+pub fn client_for(paths: &Paths, grant: &Grant) -> CliResult<Client> {
+    let client = client(paths, &grant.client)?;
+    match &grant.client_id {
+        Some(id) if *id != client.id => Err(CliError::auth(format!(
+            "the sign-in was made with another OAuth client ({id}); run `bothy auth login` again"
+        ))),
+        _ => Ok(client),
+    }
 }

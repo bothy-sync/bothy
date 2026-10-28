@@ -8,20 +8,29 @@
 cargo install bothy-cli      # installs the `bothy` binary
 ```
 
-## Google Cloud setup (once)
+## Signing in
 
-Bothy has no server and no OAuth app of its own yet, so you use a client of **your own Google
-Cloud project**. All devices of one database must use clients from the **same project**:
-Google Drive only shows a project the files that project's clients created.
+Bothy has no server. Each machine signs in to the user's own Google Drive through an OAuth
+client, and all devices of one database must use clients from the **same Google Cloud
+project**: Google Drive only shows a project the files that project's clients created.
 
-The quickest way is the guided setup. It opens each Cloud console page for your project and
-checks the downloaded client files. It then signs in and confirms that Drive answers:
+**Bothy's official client.** The prebuilt `bothy` binaries from the GitHub releases include
+the OAuth clients of Bothy's own Cloud project, so `bothy auth login` works with no setup and
+the consent screen shows "Bothy". Everyone using them shares one Drive API quota.
+`bothy auth status` shows which clients are in use.
+
+**Your own Cloud project.** A build from source (`cargo install`) has no official client, and
+apps of your own should use a project of their own anyway (their name on the consent screen,
+their own quota). The guided setup opens each Cloud console page for your project and checks
+the downloaded client files. It then signs in and confirms that Drive answers:
 
 ```sh
 bothy setup google
 # on other machines, with the same project and client file:
 bothy setup google --project my-notes-sync --client client_secret_desktop.json
 ```
+
+`bothy auth setup --official` goes back to the official clients; sign in again afterwards.
 
 The steps it walks through, if you prefer to do them by hand:
 
@@ -68,8 +77,8 @@ bothy init --remote folder:notes
 bothy put notes n1 '{"title": "Hello"}'
 bothy sync
 
-# machine 2 (a headless board)
-bothy auth setup --device-client client_secret_tv.json
+# machine 2 (a headless board; with your own project, first
+# `bothy auth setup --device-client client_secret_tv.json`)
 bothy auth login --device          # shows a code to enter at google.com/device
 bothy join --remote folder:notes
 bothy get notes n1
@@ -81,7 +90,7 @@ runs this between your computer and a Linux container.
 ## Commands
 
 ```
-bothy auth setup --client <json> [--device-client <json>]
+bothy auth setup --client <json> [--device-client <json>] | --official
 bothy auth login [--device] | logout | status
 bothy init  [--name <db>] [--remote appdata|folder[:<name>]|path:<dir>] [--app-id <id>] [--encrypt [--remember]]
 bothy join  [--name <db>] [--remote ...] [--db-id <id>] [--remember]

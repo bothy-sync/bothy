@@ -16,8 +16,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   `--project`, `--client`, `--device-client`, `--no-browser` and `--no-login` it runs
   without prompts.
 
+- OAuth: Bothy's official clients (`bothy_oauth::official`, Cloud project `bothy-512819`).
+  Release builds get their secrets at compile time (`BOTHY_OFFICIAL_DESKTOP_SECRET`,
+  `BOTHY_OFFICIAL_DEVICE_SECRET`); builds without them have none. The CLI uses them when no
+  client of one's own is stored, so `bothy auth login` in a release binary needs no Cloud
+  setup (#13). `bothy auth setup --official` goes back to them.
+
 ### Changed
 
+- OAuth: `Grant` records the id of the client that issued it (`client_id`; `None` for grants
+  stored by earlier versions). The CLI uses it to say "sign in again" after a switch between
+  clients, instead of failing with a refresh error. Breaking for code that builds `Grant`
+  with a struct literal.
 - Drive: a project without the Drive API enabled now fails with an error that says so
   (`accessNotConfigured`), instead of a generic refusal.
 - CLI: `bothy auth status` shows the client id and Cloud project of each stored client (text
