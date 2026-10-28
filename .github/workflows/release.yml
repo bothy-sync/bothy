@@ -1,0 +1,215 @@
+name: Release
+
+# A `v*` tag builds the `bothy` CLI for every platform with Bothy's official OAuth clients and
+# uploads the archives to a draft release; publishing the release stays a manual step. When a
+# release is published, the Homebrew formula in bothy-sync/homebrew-tap follows. A manual run
+# (workflow_dispatch) only builds, as a dry run. Nothing here publishes to a package registry.
+
+on:
+  push:
+    tags: ["v*"]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    if: github.event_name != 'release'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: universal-apple-darwin }
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu, cross: true }
+          - { os: ubuntu-latest, target: aarch64-unknown-linux-gnu, cross: true }
+          - { os: ubuntu-latest, target: armv7-unknown-linux-gnueabihf, cross: true }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+    defaults:
+      run:
+        shell: bash
+    env:
+      BOTHY_OFFICIAL_DESKTOP_SECRET: ${{ secrets.BOTHY_OFFICIAL_DESKTOP_SECRET }}
+      BOTHY_OFFICIAL_DEVICE_SECRET: ${{ secrets.BOTHY_OFFICIAL_DEVICE_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: The official client secrets are set
+        run: |
+          if [ -z "$BOTHY_OFFICIAL_DESKTOP_SECRET" ] || [ -z "$BOTHY_OFFICIAL_DEVICE_SECRET" ]; then
+            echo "::error::BOTHY_OFFICIAL_DESKTOP_SECRET and BOTHY_OFFICIAL_DEVICE_SECRET must be set"
+            exit 1
+          fi
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        if: matrix.cross
+        with:
+          tool: cross
+
+      - name: Build (Linux, in cross's container for an old glibc)
+        if: matrix.cross
+        run: |
+          cross build --locked --release -p bothy-cli --target ${{ matrix.target }}
+          echo "BIN=target/${{ matrix.target }}/release/bothy" >> "$GITHUB_ENV"
+      - name: Build (macOS universal)
+        if: matrix.target == 'universal-apple-darwin'
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          for t in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --locked --release -p bothy-cli --target $t
+          done
+          mkdir -p target/universal
+          lipo -create -output target/universal/bothy \
+            target/aarch64-apple-darwin/release/bothy target/x86_64-apple-darwin/release/bothy
+          echo "BIN=target/universal/bothy" >> "$GITHUB_ENV"
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cargo build --locked --release -p bothy-cli --target ${{ matrix.target }}
+          echo "BIN=target/${{ matrix.target }}/release/bothy.exe" >> "$GITHUB_ENV"
+
+      - name: The binary contains the official clients
+        run: |
+          for s in "$BOTHY_OFFICIAL_DESKTOP_SECRET" "$BOTHY_OFFICIAL_DEVICE_SECRET"; do
+            if ! grep -q -a -F -- "$s" "$BIN"; then
+              echo "::error::$BIN was built without an official client secret"
+              exit 1
+            fi
+          done
+      - name: The binary runs and uses the official clients
+        if: "!matrix.cross || matrix.target == 'x86_64-unknown-linux-gnu'"
+        run: |
+          "$BIN" --version
+          export BOTHY_HOME="$RUNNER_TEMP/bothy-home" BOTHY_TOKEN_STORE=file
+          "$BIN" --json auth status > status.json
+          python3 -c "import json,sys; c=json.load(open('status.json'))['clients']; sys.exit(0 if len(c)==2 and all(x['official'] for x in c) else 1)"
+
+      - name: Package
+        run: |
+          mkdir -p pkg dist
+          cp "$BIN" pkg/
+          cp LICENSE-MIT LICENSE-APACHE pkg/
+          cp crates/bothy-cli/README.md pkg/README.md
+          name=bothy-${{ matrix.target }}
+          if [ "$RUNNER_OS" = Windows ]; then
+            (cd pkg && 7z a -tzip "../dist/$name.zip" . > /dev/null)
+          else
+            tar -C pkg -czf "dist/$name.tar.gz" .
+          fi
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bothy-${{ matrix.target }}
+          path: dist/*
+          retention-days: 7
+
+  draft-release:
+    name: Draft release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum bothy-* > SHA256SUMS && cat SHA256SUMS
+      - name: Upload to the draft release
+        run: |
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1 ||
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --draft --verify-tag --title "$TAG" \
+              --notes "Release notes to come."
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber dist/*
+
+  homebrew:
+    name: Homebrew formula
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - name: Needs HOMEBREW_TAP_TOKEN
+        id: token
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "HOMEBREW_TAP_TOKEN is not set; skipping the formula update"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.ok
+        with:
+          repository: bothy-sync/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+      - name: Write Formula/bothy.rb
+        if: steps.token.outputs.ok
+        run: |
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p SHA256SUMS
+          sum() { awk -v f="bothy-$1.tar.gz" '$2 == f { print $1 }' SHA256SUMS; }
+          version=${TAG#v}
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
+          mkdir -p tap/Formula
+          cat > tap/Formula/bothy.rb <<EOF
+          # Updated by bothy-sync/bothy's release workflow; do not edit by hand.
+          class Bothy < Formula
+            desc "Local-first databases that sync through your own Google Drive"
+            homepage "https://bothysync.dev"
+            version "$version"
+            license any_of: ["MIT", "Apache-2.0"]
+
+            on_macos do
+              url "$base/bothy-universal-apple-darwin.tar.gz"
+              sha256 "$(sum universal-apple-darwin)"
+            end
+
+            on_linux do
+              on_intel do
+                url "$base/bothy-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "$(sum x86_64-unknown-linux-gnu)"
+              end
+              on_arm do
+                url "$base/bothy-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "$(sum aarch64-unknown-linux-gnu)"
+              end
+            end
+
+            def install
+              bin.install "bothy"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/bothy --version")
+            end
+          end
+          EOF
+          if grep -q 'sha256 ""' tap/Formula/bothy.rb; then
+            echo "::error::a checksum is missing from SHA256SUMS"
+            exit 1
+          fi
+          cat tap/Formula/bothy.rb
+      - name: Push the formula
+        if: steps.token.outputs.ok
+        working-directory: tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/bothy.rb
+          git diff --cached --quiet && exit 0
+          git commit -m "bothy ${TAG#v}"
+          git push
