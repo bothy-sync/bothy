@@ -18,8 +18,8 @@ to Google Drive.
 cargo install bothy-cli
 
 # Two local databases ("a" and "b") that sync through a folder.
-bothy --db a init --remote path:/tmp/bothy-shared
-bothy --db b join --remote path:/tmp/bothy-shared
+bothy --db a init --remote path:./bothy-shared
+bothy --db b join --remote path:./bothy-shared
 
 bothy --db a put notes n1 '{"title": "Hello", "done": false}'
 bothy --db a sync
@@ -37,7 +37,7 @@ pip install bothy
 ```python
 import bothy
 
-remote = bothy.FolderRemote("/tmp/bothy-shared")
+remote = bothy.FolderRemote("./bothy-shared")
 a = bothy.Database.open("a.db", app_id="com.example.notes", remote=remote)
 b = bothy.Database.open("b.db", app_id="com.example.notes", remote=remote)
 a.init_or_join()
@@ -91,7 +91,7 @@ use serde_json::json;
 
 #[tokio::main]
 async fn main() -> bothy::Result<()> {
-    let remote = Arc::new(FolderRemote::new("/tmp/bothy-shared")?);
+    let remote = Arc::new(FolderRemote::new("./bothy-shared")?);
     let a = Database::open(Config::new("a.db", "com.example.notes"), remote.clone()).await?;
     let b = Database::open(Config::new("b.db", "com.example.notes"), remote).await?;
     a.init_or_join().await?;
