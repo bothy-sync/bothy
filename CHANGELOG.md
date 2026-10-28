@@ -20,6 +20,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 - Drive: a project without the Drive API enabled now fails with an error that says so
   (`accessNotConfigured`), instead of a generic refusal.
+- CLI: `bothy auth status` shows the client id and Cloud project of each stored client (text
+  and `--json`), so two machines that see different data can be compared at a glance (#92).
+
+### Fixed
+
+- CLI: every `BOTHY_HOME` now keeps its Google sign-in in its own keyring entry
+  (`google:<config dir>`). Before, all homes on a machine shared one entry, and signing in
+  from one home replaced the sign-in of the others. The default home keeps the old entry, so
+  existing sign-ins keep working (#104).
 
 ## [0.4.0]
 
