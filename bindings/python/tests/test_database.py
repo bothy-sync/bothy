@@ -33,6 +33,29 @@ class Env:
         return False
 
 
+class ChangeTest(unittest.TestCase):
+    def test_repr(self):
+        cases = [
+            (("notes", "n1", True), "Change(collection='notes', id='n1', remote=True)"),
+            (("notes", "n1", False), "Change(collection='notes', id='n1', remote=False)"),
+            (("", "", False), "Change(collection='', id='', remote=False)"),
+            (("naïve", "café", True), "Change(collection='naïve', id='café', remote=True)"),
+            (("a'b", 'c"d', False), '''Change(collection="a'b", id='c"d', remote=False)'''),
+            (("notes", "line\nbreak", False), "Change(collection='notes', id='line\\nbreak', remote=False)"),
+        ]
+        for values, expected in cases:
+            with self.subTest(values=values):
+                self.assertEqual(repr(bothy.Change(values)), expected)
+
+    def test_tuple_behavior(self):
+        values = ("notes", "n1", True)
+        change = bothy.Change(values)
+        self.assertEqual(change, values)
+        self.assertEqual(tuple(change), values)
+        self.assertEqual(change[0], "notes")
+        self.assertEqual((change.collection, change.id, change.remote), values)
+
+
 class DatabaseTest(unittest.TestCase):
     def setUp(self):
         self.env = Env()

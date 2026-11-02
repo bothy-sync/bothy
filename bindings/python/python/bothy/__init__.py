@@ -100,6 +100,10 @@ def _dumps(doc: Document) -> str:
 class Change(Tuple[str, str, bool]):
     """A changed document: ``(collection, id, remote)``."""
 
+    def __repr__(self) -> str:
+        return (f"Change(collection={self.collection!r}, id={self.id!r}, "
+                f"remote={self.remote!r})")
+
     @property
     def collection(self) -> str:
         return self[0]
