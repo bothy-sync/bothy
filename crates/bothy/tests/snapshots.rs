@@ -1,10 +1,11 @@
 //! Snapshots, joining from a snapshot, compaction, gap repair and device-id forks.
 
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
-use bothy::remote::{FolderRemote, RemoteStore};
+use async_trait::async_trait;
+use bothy::remote::{FolderRemote, PutOutcome, RemoteEntry, RemoteStore};
 use bothy::store::PackLimits;
 use bothy::{Clock, Config, Database, DbId, SnapshotPolicy};
 use serde_json::json;
@@ -313,4 +314,111 @@ async fn pruning_a_lost_device_keeps_its_data_and_newest_segment() {
             .unwrap()
             .is_some()
     );
+}
+
+/// A remote whose listing can lag behind, hiding the segments of one device.
+struct LaggingList {
+    inner: Arc<FolderRemote>,
+    hidden: Mutex<Option<String>>,
+}
+
+#[async_trait]
+impl RemoteStore for LaggingList {
+    async fn list(&self, prefix: &str) -> bothy::Result<Vec<RemoteEntry>> {
+        let hidden = self.hidden.lock().unwrap().clone();
+        let mut entries = self.inner.list(prefix).await?;
+        if let Some(h) = hidden {
+            entries.retain(|e| !e.key.contains(&h) || e.key.ends_with("device.json"));
+        }
+        Ok(entries)
+    }
+
+    async fn get(&self, key: &str) -> bothy::Result<Option<Vec<u8>>> {
+        self.inner.get(key).await
+    }
+
+    async fn put_new(
+        &self,
+        key: &str,
+        data: &[u8],
+        reservation: Option<&str>,
+    ) -> bothy::Result<PutOutcome> {
+        self.inner.put_new(key, data, reservation).await
+    }
+
+    async fn delete(&self, key: &str) -> bothy::Result<()> {
+        self.inner.delete(key).await
+    }
+}
+
+/// A restored copy uploads into a seq the original compacted away, while a stale listing hides
+/// the original's newer segments: no collision, and devices past that seq never read the upload.
+#[tokio::test]
+async fn restored_copy_writing_into_a_compacted_seq_loses_nothing() {
+    let env = Env::new();
+    let a = env.open("a").await;
+    let db_id = a.init().await.unwrap();
+    let b = env.open("b").await;
+    b.join(db_id).await.unwrap();
+    write_n(&a, 0, 2).await;
+    a.sync().await.unwrap();
+    b.sync().await.unwrap();
+    let id = a.device_id();
+    drop(a);
+    std::fs::copy(env.path("a"), env.path("copy")).unwrap();
+
+    // The original moves on, then compacts the seqs the copy will use next.
+    let a = env.open("a").await;
+    write_n(&a, 2, 2).await;
+    a.collection("notes")
+        .unwrap()
+        .put("n0", json!({"i": "newer"}))
+        .await
+        .unwrap();
+    a.sync().await.unwrap();
+    a.snapshot().await.unwrap();
+    b.sync().await.unwrap();
+    env.advance(2 * DAY);
+    let compacted = a.compact(false).await.unwrap();
+    assert!(compacted.segments.len() >= 3, "{compacted:?}");
+
+    let lagging = Arc::new(LaggingList {
+        inner: env.remote.clone(),
+        hidden: Mutex::new(Some(id.to_hex())),
+    });
+    let copy = Database::open(env.config("copy"), lagging.clone())
+        .await
+        .unwrap();
+    copy.collection("notes")
+        .unwrap()
+        .put("from_copy", json!({"v": 1}))
+        .await
+        .unwrap();
+    let report = copy.sync().await.unwrap();
+    assert_eq!(report.forked_to, None, "the listing hides the collision");
+    assert_eq!(report.segments_up, 1);
+
+    *lagging.hidden.lock().unwrap() = None;
+    let report = copy.sync().await.unwrap();
+    assert!(report.forked_to.is_some(), "the listing caught up");
+
+    for _ in 0..2 {
+        a.sync().await.unwrap();
+        b.sync().await.unwrap();
+        copy.sync().await.unwrap();
+    }
+    for db in [&a, &b, &copy] {
+        let notes = db.collection("notes").unwrap();
+        assert!(notes.get("from_copy").await.unwrap().is_some());
+        assert!(notes.get("n3").await.unwrap().is_some(), "the original's");
+        // Re-issuing the copy's old ops does not undo a newer write it had not seen.
+        let n0 = notes.get("n0").await.unwrap().unwrap().to_json();
+        assert_eq!(n0["i"], json!("newer"));
+    }
+    same(&a, &b).await;
+    same(&a, &copy).await;
+
+    let fresh = env.open("fresh").await;
+    fresh.join(db_id).await.unwrap();
+    same(&a, &fresh).await;
 }

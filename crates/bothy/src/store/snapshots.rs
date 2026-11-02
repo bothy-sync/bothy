@@ -301,40 +301,45 @@ impl Store {
     }
 
     /// Handles a device-id fork (this database file also runs elsewhere): takes a new device id
-    /// and re-issues the unsent ops that still win under the new id. Returns the new id.
+    /// and re-issues the ops that still win under the new id. Returns the new id.
+    ///
+    /// Uploaded ops are re-issued too, not only unsent ones. A segment uploaded under the old id
+    /// may have landed on a seq the other install had already used and compacted away, which
+    /// looks like a normal upload; devices past that seq never read it. Each op moves up by one
+    /// HLC tick only, so it never beats a newer write this install has not pulled yet, yet beats
+    /// its own old copy, so every device settles on the same stamp whether it read both or one.
+    ///
+    /// The same holes hide the other install's writes from us, so the old id's segments are read
+    /// again from the start, and gaps below them are repaired from a snapshot.
     pub fn fork_device(&mut self) -> Result<DeviceId> {
         let old = self.device;
         let new = self.new_fork_id()?;
-        let uploaded = self.uploaded_watermark()?;
         let wall = self.clock.now_ms();
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let unsent: Vec<Vec<u8>> = {
-            let mut stmt = tx.prepare(
-                "SELECT op FROM outbox
-                 WHERE segment_seq IS NULL OR segment_seq IN (SELECT seq FROM pending_uploads)
-                 ORDER BY local_seq",
-            )?;
+        let ops: Vec<Vec<u8>> = {
+            let mut stmt = tx.prepare("SELECT op FROM outbox ORDER BY local_seq")?;
             stmt.query_map([], |r| r.get(0))?
                 .collect::<rusqlite::Result<_>>()?
         };
         tx.execute_batch(
             "DELETE FROM pending_uploads; DELETE FROM outbox; DELETE FROM own_snapshots;",
         )?;
-        // Our segments under the old id that reached the remote are already in the state.
         tx.execute(
-            "INSERT INTO devices (device_id, watermark) VALUES (?1, ?2)
-             ON CONFLICT (device_id) DO UPDATE SET watermark = MAX(watermark, excluded.watermark)",
-            params![old.as_bytes().as_slice(), uploaded as i64],
+            "INSERT INTO devices (device_id, watermark) VALUES (?1, 0)
+             ON CONFLICT (device_id) DO UPDATE SET watermark = 0",
+            params![old.as_bytes().as_slice()],
         )?;
+        // A change feed would not report those segments again; the next sync lists everything.
+        set_meta(&tx, "last_full_list_ms", 0i64)?;
         set_meta(&tx, "device_id", new.as_bytes().as_slice())?;
         set_meta(&tx, "next_seq", 1i64)?;
         set_meta(&tx, "since_snapshot_segments", 0i64)?;
         set_meta(&tx, "since_snapshot_bytes", 0i64)?;
         set_meta(&tx, "compacted_upto", 0i64)?;
 
-        for bytes in unsent {
+        for bytes in ops {
             let mut d = Decoder::new(&bytes);
             let op = decode_op(&mut d)?;
             let old_stamp = Stamp::new(op.hlc, old);
@@ -364,7 +369,8 @@ impl Store {
                 }
             };
             let Some(kind) = kind else { continue };
-            let hlc = self.hlc.now(wall);
+            let hlc = Hlc::from_u64(op.hlc.as_u64() + 1);
+            self.hlc.observe(hlc, wall);
             let mut after: DocState = before.clone();
             after.apply(&kind, Stamp::new(hlc, new));
             let reissued = Op {

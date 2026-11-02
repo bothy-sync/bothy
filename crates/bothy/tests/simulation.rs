@@ -433,6 +433,16 @@ impl Sim {
                 "seed {seed}: device {i} differs from the remote state"
             );
         }
+        // Finish compactions a fault interrupted: they delete remote segments before pruning the
+        // outbox, and a snapshot covers those segments. Time passes first, because clock skew can
+        // make a snapshot that was old enough for the interrupted run too young now.
+        self.base.fetch_add(2 * DAY, Ordering::SeqCst);
+        for i in 0..self.devices.len() {
+            let db = self.db(i).await;
+            db.compact(false)
+                .await
+                .unwrap_or_else(|e| panic!("seed {seed}: device {i}: compact: {e}"));
+        }
         // No local op was left behind: everything in the outbox reached the remote.
         for i in 0..self.devices.len() {
             self.crash(i);
@@ -602,6 +612,14 @@ async fn run_range(block: u64) {
                 && t.peer_rejected > 0,
             "not every fault or feature was exercised: {t:?}"
         );
+    }
+}
+
+/// Seeds that found bugs in nightly runs, so the normal test run keeps checking them.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn seeds_that_found_bugs() {
+    for seed in [3335, 11176, 11463, 20941, 35750, 47833] {
+        Sim::new(seed).run().await;
     }
 }
 

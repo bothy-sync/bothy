@@ -77,6 +77,23 @@ async fn newest_snapshots(inner: &Inner, db_id: DbId) -> Result<Vec<Candidate>> 
     Ok(newest.into_iter().map(|(d, (h, k))| (k, d, h)).collect())
 }
 
+/// Every snapshot, newest first.
+async fn all_snapshots(inner: &Inner, db_id: DbId) -> Result<Vec<Candidate>> {
+    let mut all = Vec::new();
+    for e in inner.remote.list(&format!("{db_id}/snapshots/")).await? {
+        let Some(key) = LogicalKey::parse(&e.key) else {
+            continue;
+        };
+        if let KeyKind::Snapshot(dev, hlc) = key.kind
+            && key.db_id == db_id
+        {
+            all.push((e.key, dev, hlc));
+        }
+    }
+    all.sort_by_key(|(_, _, hlc)| std::cmp::Reverse(*hlc));
+    Ok(all)
+}
+
 /// Downloads a snapshot and reads its version vector. `None` if gone or invalid.
 async fn fetch(
     inner: &Arc<Inner>,
@@ -161,16 +178,22 @@ pub(crate) async fn join_from_snapshot(
 
 /// Repairs gaps (a device's next segment is gone while later ones exist) from a snapshot that
 /// covers them. Gaps that no snapshot covers yet are reported.
+///
+/// Any snapshot may be the one: after a restored copy, the newest under a device id can cover
+/// less than an older one, because two installs wrote them.
 pub(crate) async fn fill_gaps(
     inner: &Arc<Inner>,
     db_id: DbId,
     report: &mut SyncReport,
 ) -> Result<()> {
-    let gaps = inner.store(|s| s.gaps()).await?;
+    let mut gaps = inner.store(|s| s.gaps()).await?;
     if gaps.is_empty() {
         return Ok(());
     }
-    for cand in newest_snapshots(inner, db_id).await? {
+    for cand in all_snapshots(inner, db_id).await? {
+        if gaps.is_empty() {
+            break;
+        }
         let key = cand.0.clone();
         if cand.1 == inner.device() || inner.store(move |s| s.is_snapshot_applied(&key)).await? {
             continue;
@@ -184,9 +207,10 @@ pub(crate) async fn fill_gaps(
         {
             let (key, device, hlc) = cand;
             apply(inner, db_id, key, device, hlc, bytes, report).await?;
+            gaps = inner.store(|s| s.gaps()).await?;
         }
     }
-    report.gaps = inner.store(|s| s.gaps()).await?;
+    report.gaps = gaps;
     Ok(())
 }
 

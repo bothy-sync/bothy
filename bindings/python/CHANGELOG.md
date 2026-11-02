@@ -3,6 +3,7 @@
 - `bothy.auth.device_login()`, `loopback_login()` and `TokenProvider(None, grant)` use Bothy's
   official OAuth clients when no client file is given. Release wheels include them; a build
   from source has none and needs a client file of your own Cloud project.
+- `Change` prints its fields: `Change(collection='notes', id='n1', remote=True)` (#94).
 
 ## 0.4.0
 
