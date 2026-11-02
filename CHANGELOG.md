@@ -47,8 +47,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - Engine: writes of a restored copy of a database file could stay invisible to other devices.
   If the original had compacted the segment numbers the copy used next while a stale listing
   hid its newer segments, the copy's upload looked normal, and devices past that number never
-  read it. After a device-id fork, every op still in the outbox is now re-issued, moved up by
-  one HLC tick, and the old id's segments are read again from the start (#115).
+  read it. Compaction now first writes `devices/<id>/compacted.json`, and a device reads that
+  file directly before uploading and takes a new device id if it is behind it. Older versions
+  ignore the file (#115).
 - Engine: gap repair only tried the newest snapshot of each device id, which after a restored
   copy can cover less than an older one, so the gap stayed. It now tries all of them (#115).
 

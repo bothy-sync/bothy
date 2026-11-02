@@ -252,6 +252,36 @@ async fn push(inner: &Arc<Inner>, db_id: DbId, report: &mut SyncReport) -> Resul
     }
 }
 
+/// The file that says how far a device id's segments were compacted.
+///
+/// Compaction frees seqs: another install using this id (a restored copy) could upload into one
+/// without a collision, and devices past that seq would never read it. Listings can lag behind
+/// and hide the newer segments that give it away, so this file is read directly before uploading.
+/// A seq above `next_seq` written here can only come from another install.
+pub(crate) fn compacted_key(db_id: DbId, device: DeviceId) -> String {
+    format!("{db_id}/devices/{device}/compacted.json")
+}
+
+/// Forks if another install compacted this id past the seqs we would use next.
+async fn check_compacted(inner: &Arc<Inner>, db_id: DbId, report: &mut SyncReport) -> Result<()> {
+    if !inner.store(|s| s.has_outgoing()).await? {
+        return Ok(());
+    }
+    let key = compacted_key(db_id, inner.device());
+    let Some(bytes) = inner.remote.get(&key).await? else {
+        return Ok(());
+    };
+    // An unreadable file says nothing; the listing check still applies.
+    let upto = serde_json::from_slice::<serde_json::Value>(&bytes)
+        .ok()
+        .and_then(|j| j["upto"].as_u64())
+        .unwrap_or(0);
+    if upto >= inner.store(|s| s.next_seq()).await? {
+        fork(inner, db_id, report).await?;
+    }
+    Ok(())
+}
+
 /// Takes a new device id after a collision with another install using ours.
 async fn fork(inner: &Arc<Inner>, db_id: DbId, report: &mut SyncReport) -> Result<()> {
     let new = inner.store(|s| s.fork_device()).await?;
@@ -426,6 +456,7 @@ pub(crate) async fn sync(inner: &Arc<Inner>) -> Result<SyncReport> {
     let fetched = fetch(inner, db_id).await?;
     inner.p2p_signals(&fetched.entries);
     check_fork(inner, db_id, &fetched.entries, &mut report).await?;
+    check_compacted(inner, db_id, &mut report).await?;
     match push(inner, db_id, &mut report).await {
         Ok(()) => {}
         // A full remote stops pushing but not pulling.

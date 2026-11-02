@@ -299,6 +299,19 @@ pub(crate) async fn compact(
         // it and repairs from a snapshot. Without it, a fully compacted device looks idle.
         .min(uploaded.saturating_sub(1));
     if covered > done_upto {
+        if !dry_run {
+            // Before any seq is freed, so that another install using this id can tell.
+            let key = super::compacted_key(db_id, me);
+            let body = serde_json::json!({ "upto": covered }).to_string();
+            inner.remote.delete(&key).await?;
+            match inner.remote.put_new(&key, body.as_bytes(), None).await? {
+                PutOutcome::Created | PutOutcome::AlreadyExists { same_content: true } => {}
+                // The delete has not reached the listing yet; compact at the next chance.
+                PutOutcome::AlreadyExists {
+                    same_content: false,
+                } => return Ok(CompactReport::default()),
+            }
+        }
         // Own segment seqs are known (1..=n), so delete by key instead of trusting a listing
         // that may lag behind. Deleting a missing file succeeds.
         for seq in done_upto + 1..=covered {

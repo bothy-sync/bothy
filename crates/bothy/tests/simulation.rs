@@ -618,7 +618,7 @@ async fn run_range(block: u64) {
 /// Seeds that found bugs in nightly runs, so the normal test run keeps checking them.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn seeds_that_found_bugs() {
-    for seed in [3335, 11176, 11463, 20941, 35750, 47833] {
+    for seed in [3335, 11176, 11463, 20941, 24000, 35750, 47833] {
         Sim::new(seed).run().await;
     }
 }

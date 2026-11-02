@@ -229,6 +229,16 @@ impl Store {
         )?)
     }
 
+    /// Whether anything waits to be packed or uploaded.
+    pub fn has_outgoing(&self) -> Result<bool> {
+        Ok(self.conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM outbox WHERE segment_seq IS NULL)
+                OR EXISTS (SELECT 1 FROM pending_uploads)",
+            [],
+            |r| r.get(0),
+        )?)
+    }
+
     /// Number of local ops ever written to the outbox (packed or not).
     pub fn outbox_count(&self) -> Result<u64> {
         let n: i64 = self

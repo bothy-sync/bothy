@@ -395,12 +395,19 @@ async fn restored_copy_writing_into_a_compacted_seq_loses_nothing() {
         .await
         .unwrap();
     let report = copy.sync().await.unwrap();
-    assert_eq!(report.forked_to, None, "the listing hides the collision");
-    assert_eq!(report.segments_up, 1);
-
+    assert!(
+        report.forked_to.is_some(),
+        "the original's compaction gives it away although the listing lags"
+    );
+    assert!(
+        env.remote
+            .get(&format!("{db_id}/devices/{id}/seg-{:016x}.bseg", 3))
+            .await
+            .unwrap()
+            .is_none(),
+        "nothing went into the freed seq"
+    );
     *lagging.hidden.lock().unwrap() = None;
-    let report = copy.sync().await.unwrap();
-    assert!(report.forked_to.is_some(), "the listing caught up");
 
     for _ in 0..2 {
         a.sync().await.unwrap();
