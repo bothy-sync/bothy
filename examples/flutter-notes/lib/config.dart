@@ -34,6 +34,15 @@ const benchEcho = bool.fromEnvironment('BOTHY_BENCH');
 /// Identifier of the background sync task (Android WorkManager, iOS BGTaskScheduler).
 const syncTaskId = 'dev.bothy.notes.sync';
 
+/// The version shown under About; release builds set it from their tag.
+const appVersion = String.fromEnvironment(
+  'BOTHY_APP_VERSION',
+  defaultValue: 'development build',
+);
+
+const sourceUrl = 'https://github.com/bothy-sync/bothy';
+const privacyUrl = 'https://bothysync.dev/privacy/';
+
 /// "Desktop app" OAuth client, for the browser sign-in on macOS, Linux and Windows.
 const desktopClientId = String.fromEnvironment('GOOGLE_DESKTOP_CLIENT_ID');
 

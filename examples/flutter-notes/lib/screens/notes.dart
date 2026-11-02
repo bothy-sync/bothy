@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:bothy/bothy.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
+import '../config.dart';
 import 'conflicts.dart';
 import 'editor.dart';
 import 'robot.dart';
@@ -81,6 +83,31 @@ class _NotesScreenState extends State<NotesScreen> {
     return p.discovering ? ' · looking for devices' : '';
   }
 
+  Future<void> _about() async {
+    showAboutDialog(
+      context: context,
+      applicationName: 'Bothy Notes',
+      applicationVersion: appVersion,
+      applicationLegalese: 'A demo of Bothy. MIT OR Apache-2.0.',
+      children: [
+        const SizedBox(height: 16),
+        const Text(
+          'Your notes stay on your devices and in your own Google Drive. '
+          'There is no server.',
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: () => launchUrl(Uri.parse(sourceUrl)),
+          child: const Text('Source code'),
+        ),
+        TextButton(
+          onPressed: () => launchUrl(Uri.parse(privacyUrl)),
+          child: const Text('Privacy policy'),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
@@ -120,10 +147,15 @@ class _NotesScreenState extends State<NotesScreen> {
             icon: const Icon(Icons.sync),
           ),
           PopupMenuButton<String>(
-            onSelected: (v) => v == 'lock' ? state.lock() : state.signOut(),
+            onSelected: (v) => switch (v) {
+              'lock' => state.lock(),
+              'signout' => state.signOut(),
+              _ => _about(),
+            },
             itemBuilder: (_) => const [
               PopupMenuItem(value: 'lock', child: Text('Lock and forget key')),
               PopupMenuItem(value: 'signout', child: Text('Sign out')),
+              PopupMenuItem(value: 'about', child: Text('About')),
             ],
           ),
         ],

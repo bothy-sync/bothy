@@ -1,0 +1,166 @@
+name: App release
+
+# An `app-v*` tag builds the Bothy Notes demo with Bothy's official OAuth clients and uploads a
+# signed Android APK and an unnotarized macOS app to a draft release; publishing it stays a manual
+# step. A manual run (workflow_dispatch) and a pull request that changes this file only build.
+
+on:
+  push:
+    tags: ["app-v*"]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/app-release.yml
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Public client ids of the Cloud project bothy-512819 (crates/bothy-oauth/src/official.rs).
+  DESKTOP_CLIENT_ID: 983923837909-c1rflgiktq04kghhdo9jedc3h54p8huo.apps.googleusercontent.com
+  WEB_CLIENT_ID: 983923837909-havv2i66smgigpi6sqj86ltfl6dnto2f.apps.googleusercontent.com
+  # The release key, registered with the project's Android client.
+  KEY_SHA1: f7bc9370c23b2de195b9bd6a4bc8858c85c46fc9
+
+jobs:
+  android:
+    name: Android APK
+    # A pull request from a fork gets no secrets, so it cannot sign the app.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/flutter-notes
+    env:
+      KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: bindings/flutter/rust
+      - name: The release key
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD must be set"
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > android/release.jks
+          {
+            echo "storeFile=release.jks"
+            echo "keyAlias=bothy"
+            echo "password=$(printf '%s' "$KEYSTORE_PASSWORD" | tr -d '\r\n')"
+          } > android/key.properties
+      - name: Version from the tag
+        run: echo "VERSION=$(case "$GITHUB_REF_NAME" in app-v*) echo "${GITHUB_REF_NAME#app-v}";; *) echo 0.0.0-dryrun;; esac)" >> "$GITHUB_ENV"
+      - run: flutter pub get
+      - name: Build
+        run: |
+          flutter build apk --release \
+            --build-name "${VERSION%%-*}" --build-number "$GITHUB_RUN_NUMBER" \
+            --dart-define=GOOGLE_WEB_CLIENT_ID="$WEB_CLIENT_ID" \
+            --dart-define=BOTHY_APP_VERSION="$VERSION"
+      - name: Signed with the release key
+        run: |
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$apksigner" verify --print-certs "$apk" | tee certs.txt
+          grep -q "SHA-1 digest: $KEY_SHA1" certs.txt
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cp "$apk" "$GITHUB_WORKSPACE/dist/bothy-notes-android.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*
+          retention-days: 7
+
+  macos:
+    name: macOS app
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: examples/flutter-notes
+    env:
+      DESKTOP_CLIENT_SECRET: ${{ secrets.BOTHY_OFFICIAL_DESKTOP_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: bindings/flutter/rust
+      - name: The official client secret is set
+        run: |
+          if [ -z "$DESKTOP_CLIENT_SECRET" ]; then
+            echo "::error::BOTHY_OFFICIAL_DESKTOP_SECRET must be set"
+            exit 1
+          fi
+      - name: Version from the tag
+        run: echo "VERSION=$(case "$GITHUB_REF_NAME" in app-v*) echo "${GITHUB_REF_NAME#app-v}";; *) echo 0.0.0-dryrun;; esac)" >> "$GITHUB_ENV"
+      - run: flutter pub get
+      - name: Build
+        run: |
+          flutter build macos --release \
+            --build-name "${VERSION%%-*}" --build-number "$GITHUB_RUN_NUMBER" \
+            --dart-define=GOOGLE_DESKTOP_CLIENT_ID="$DESKTOP_CLIENT_ID" \
+            --dart-define=GOOGLE_DESKTOP_CLIENT_SECRET="$DESKTOP_CLIENT_SECRET" \
+            --dart-define=BOTHY_APP_VERSION="$VERSION"
+      - name: Universal, and zipped with its signature intact
+        run: |
+          app="build/macos/Build/Products/Release/Bothy Notes.app"
+          lipo -archs "$app/Contents/MacOS/Bothy Notes" | tee archs.txt
+          grep -q arm64 archs.txt && grep -q x86_64 archs.txt
+          codesign --verify --deep --strict "$app"
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          ditto -c -k --keepParent "$app" "$GITHUB_WORKSPACE/dist/bothy-notes-macos.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*
+          retention-days: 7
+
+  draft-release:
+    name: Draft release
+    needs: [android, macos]
+    if: startsWith(github.ref, 'refs/tags/app-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum bothy-notes-* > SHA256SUMS && cat SHA256SUMS
+      # Never "latest": install.sh downloads the CLI from the latest release.
+      - name: Upload to the draft release
+        run: |
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1 ||
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --draft --verify-tag --latest=false \
+              --title "Bothy Notes ${TAG#app-v}" --notes "Release notes to come."
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber dist/*

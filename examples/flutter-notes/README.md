@@ -12,6 +12,22 @@ A notes app on top of the [`bothy`](../../bindings/flutter) Flutter package. It 
   also runs in the background, about every 15 minutes, when the key is remembered.
 - It runs on Android, iOS, macOS, Linux and Windows.
 
+## Download
+
+Android and macOS builds are on the
+[releases page](https://github.com/bothy-sync/bothy/releases) (tags `app-v*`). They use Bothy's
+official OAuth client, so there is nothing to set up: sign in with Google and pick a password.
+
+- **Android:** install `bothy-notes-android.apk`. Android asks you to allow installs from your
+  browser or file manager first.
+- **macOS 11 or later:** unzip `bothy-notes-macos.zip` and move *Bothy Notes* to Applications.
+  The app is not notarized, so macOS blocks the first launch. Open it once, then go to
+  **System Settings → Privacy & Security** and choose **Open Anyway**.
+
+The rest of this page is for building the app yourself, with your own OAuth clients.
+
+## The same database from the CLI
+
 The [CLI](../../crates/bothy-cli) can open the same database:
 
 ```sh

@@ -5,10 +5,10 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = bothy_notes
+PRODUCT_NAME = Bothy Notes
 
 // The application's bundle identifier
 PRODUCT_BUNDLE_IDENTIFIER = dev.bothy.bothyNotes
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 dev.bothy. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 the Bothy contributors. MIT OR Apache-2.0.
