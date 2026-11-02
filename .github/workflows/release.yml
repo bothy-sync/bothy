@@ -177,7 +177,8 @@ jobs:
 
   homebrew:
     name: Homebrew formula
-    if: github.event_name == 'release'
+    # Demo app releases (app-v*) have nothing to do with the formula.
+    if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
