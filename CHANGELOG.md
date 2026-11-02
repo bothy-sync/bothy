@@ -22,6 +22,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   client of one's own is stored, so `bothy auth login` in a release binary needs no Cloud
   setup (#13). `bothy auth setup --official` goes back to them.
 
+- Release: prebuilt `bothy` binaries for macOS (universal), Linux (x86_64, aarch64, armv7) and
+  Windows (x86_64) with Bothy's official clients on every GitHub release, a Homebrew formula
+  (`brew install bothy-sync/tap/bothy`), and an install script
+  (`curl -fsSL https://bothysync.dev/install.sh | sh`) (#108).
+
 ### Changed
 
 - OAuth: `Grant` records the id of the client that issued it (`client_id`; `None` for grants

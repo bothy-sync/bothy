@@ -3,7 +3,8 @@ name: Release
 # A `v*` tag builds the `bothy` CLI for every platform with Bothy's official OAuth clients and
 # uploads the archives to a draft release; publishing the release stays a manual step. When a
 # release is published, the Homebrew formula in bothy-sync/homebrew-tap follows. A manual run
-# (workflow_dispatch) only builds, as a dry run. Nothing here publishes to a package registry.
+# (workflow_dispatch) and a pull request that changes the release files only build and try the
+# install script, as a dry run. Nothing here publishes to a package registry.
 
 on:
   push:
@@ -11,6 +12,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - Cross.toml
+      - site/public/install.sh
 
 permissions:
   contents: read
@@ -21,7 +27,10 @@ env:
 jobs:
   build:
     name: Build (${{ matrix.target }})
-    if: github.event_name != 'release'
+    # A pull request from a fork gets no secrets, so it cannot build the release binaries.
+    if: >-
+      github.event_name != 'release' && (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -100,7 +109,7 @@ jobs:
           if [ "$RUNNER_OS" = Windows ]; then
             (cd pkg && 7z a -tzip "../dist/$name.zip" . > /dev/null)
           else
-            tar -C pkg -czf "dist/$name.tar.gz" .
+            tar -C pkg -czf "dist/$name.tar.gz" bothy LICENSE-MIT LICENSE-APACHE README.md
           fi
           ls -l dist
       - uses: actions/upload-artifact@v4
@@ -109,9 +118,41 @@ jobs:
           path: dist/*
           retention-days: 7
 
+  install-script:
+    name: Install script (${{ matrix.target }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: universal-apple-darwin }
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: bothy-${{ matrix.target }}
+          path: rel
+      - name: Install from the built archive and run it
+        run: |
+          (cd rel && shasum -a 256 bothy-* > SHA256SUMS)
+          BOTHY_DOWNLOAD_URL="file://$PWD/rel" BOTHY_INSTALL_DIR="$RUNNER_TEMP/bin" \
+            sh site/public/install.sh
+          "$RUNNER_TEMP/bin/bothy" --version
+      - name: A wrong checksum is refused
+        run: |
+          (cd rel && sed -i.bak 's/^[0-9a-f]*/deadbeef/' SHA256SUMS)
+          if BOTHY_DOWNLOAD_URL="file://$PWD/rel" BOTHY_INSTALL_DIR="$RUNNER_TEMP/bad" \
+            sh site/public/install.sh; then
+            echo "::error::install.sh accepted a wrong checksum"
+            exit 1
+          fi
+          test ! -e "$RUNNER_TEMP/bad/bothy"
+
   draft-release:
     name: Draft release
-    needs: build
+    needs: [build, install-script]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:

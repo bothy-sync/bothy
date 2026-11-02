@@ -60,9 +60,11 @@ want="$(awk -v f="$archive" '$2 == f { print $1 }' "$tmp/SHA256SUMS")"
 [ -n "$want" ] || fail "$archive is not listed in SHA256SUMS"
 [ "$(sha256 "$tmp/$archive")" = "$want" ] || fail "checksum mismatch for $archive; not installing"
 
-tar -xzf "$tmp/$archive" -C "$tmp" bothy
+mkdir "$tmp/unpacked"
+tar -xzf "$tmp/$archive" -C "$tmp/unpacked"
+[ -f "$tmp/unpacked/bothy" ] || fail "$archive has no bothy binary"
 mkdir -p "$dir"
-mv "$tmp/bothy" "$dir/bothy"
+mv "$tmp/unpacked/bothy" "$dir/bothy"
 chmod 755 "$dir/bothy"
 echo "Installed $("$dir/bothy" --version) to $dir/bothy"
 
