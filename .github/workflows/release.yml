@@ -150,9 +150,35 @@ jobs:
           fi
           test ! -e "$RUNNER_TEMP/bad/bothy"
 
+  homebrew-token:
+    name: Homebrew token
+    # The formula update only runs when a release is published; find a bad token before that.
+    if: >-
+      github.event_name != 'release' && (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+    steps:
+      - name: HOMEBREW_TAP_TOKEN can push to the tap
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN is empty or not set"
+            exit 1
+          fi
+          push=$(gh api repos/bothy-sync/homebrew-tap --jq .permissions.push) || {
+            echo "::error::HOMEBREW_TAP_TOKEN cannot read bothy-sync/homebrew-tap"
+            exit 1
+          }
+          if [ "$push" != true ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN cannot push to bothy-sync/homebrew-tap"
+            exit 1
+          fi
+          echo "the token can push to bothy-sync/homebrew-tap"
+
   draft-release:
     name: Draft release
-    needs: [build, install-script]
+    needs: [build, install-script, homebrew-token]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
