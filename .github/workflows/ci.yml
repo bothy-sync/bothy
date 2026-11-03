@@ -269,6 +269,10 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+      # A debug APK compiles the Rust core for four Android ABIs, which fills the runner's disk.
+      - name: Free disk space
+        if: runner.os == 'Linux'
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL && df -h /
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -292,7 +296,7 @@ jobs:
         working-directory: bindings/flutter/example
         run: |
           case "$RUNNER_OS" in
-            Linux) flutter build linux --debug && flutter build apk --debug ;;
+            Linux) flutter build linux --debug && flutter build apk --debug && df -h / ;;
             macOS) flutter build macos --debug && flutter build ios --simulator --debug ;;
             Windows) flutter build windows --debug ;;
           esac
@@ -321,6 +325,10 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+      # A debug APK compiles the Rust core for four Android ABIs, which fills the runner's disk.
+      - name: Free disk space
+        if: runner.os == 'Linux'
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL && df -h /
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -338,7 +346,7 @@ jobs:
       - name: Build
         run: |
           case "$RUNNER_OS" in
-            Linux) flutter build linux --debug && flutter build apk --debug ;;
+            Linux) flutter build linux --debug && flutter build apk --debug && df -h / ;;
             macOS) flutter build macos --debug && flutter build ios --simulator --debug ;;
             Windows) flutter build windows --debug ;;
           esac
