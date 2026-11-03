@@ -8,6 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.5.0]
+
+Easier to start: sign in with no Cloud setup, prebuilt binaries, and a guided setup for a project
+of your own. On-remote format unchanged (`bothy_format = 1`); the new `compacted.json` file is
+optional and older versions ignore it. The Python and Flutter packages have their own changelogs.
+
 ### Added
 
 - CLI: `bothy setup google`, a guided setup of the Google Cloud project and OAuth clients.
@@ -211,7 +217,8 @@ On-remote format `bothy_format = 1`.
 
 Name reservation: the hybrid logical clock type and the format version constant.
 
-[Unreleased]: https://github.com/bothy-sync/bothy/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/bothy-sync/bothy/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/bothy-sync/bothy/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/bothy-sync/bothy/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/bothy-sync/bothy/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bothy-sync/bothy/compare/v0.1.0...v0.2.0

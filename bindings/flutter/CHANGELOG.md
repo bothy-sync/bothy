@@ -1,3 +1,8 @@
+## 0.5.0
+
+Built on `bothy` 0.5.0, which fixes a case where writes of a restored copy of a database file
+could stay invisible to other devices. No API changes.
+
 ## 0.4.0
 
 Built on `bothy` 0.4.0.

@@ -2,7 +2,7 @@
 
 **Serverless, local-first sync engine that uses the user's own cloud storage as the transport.**
 
-> ⚠️ **Early release (0.2).** The API and the on-remote format can still change before 1.0.
+> ⚠️ **Early release (0.5).** The API and the on-remote format can still change before 1.0.
 
 Each device keeps a local SQLite database as the source of truth and works offline. Devices
 exchange immutable files through the user's own Google Drive (or a shared directory). There is

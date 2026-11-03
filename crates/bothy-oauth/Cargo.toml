@@ -20,7 +20,7 @@ keyring = ["dep:keyring"]
 [dependencies]
 async-trait = "0.1"
 base64 = "0.23"
-bothy = { path = "../bothy", version = "0.4.0", default-features = false }
+bothy = { path = "../bothy", version = "0.5.0", default-features = false }
 getrandom = "0.4"
 keyring = { version = "4.2", optional = true }
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "form"] }

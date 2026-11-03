@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'bothy'
-  s.version          = '0.4.0'
+  s.version          = '0.5.0'
   s.summary          = "Serverless, local-first sync over the user's own Google Drive."
   s.description      = <<-DESC
 Serverless, local-first sync over the user's own Google Drive.
