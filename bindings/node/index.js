@@ -71,6 +71,30 @@ export class Collection {
   get(id) {
     return call(() => this.#native.get(id));
   }
+
+  patch(id, fields, unset) {
+    if (unset !== undefined && !Array.isArray(unset)) {
+      return Promise.reject(new BothyError("InvalidInput", "unset must be an array of field names"));
+    }
+    return call(() => this.#native.patch(id, fields, unset));
+  }
+
+  delete(id) {
+    return call(() => this.#native.delete(id));
+  }
+
+  list(options) {
+    return call(() => {
+      if (options !== undefined && options !== null && typeof options !== "object") {
+        throw new BothyError("InvalidInput", "list needs an options object");
+      }
+      const { limit, after } = options ?? {};
+      if (limit !== undefined && !(Number.isSafeInteger(limit) && limit >= 0)) {
+        throw new BothyError("InvalidInput", "limit must be a non-negative integer");
+      }
+      return this.#native.list(limit === undefined ? null : Math.min(limit, 0xffff_ffff), after ?? null);
+    });
+  }
 }
 
 export class Database {
@@ -98,6 +122,10 @@ export class Database {
     } catch (err) {
       throw translate(err);
     }
+  }
+
+  collections() {
+    return call(() => this.#native.collections());
   }
 
   initOrJoin() {

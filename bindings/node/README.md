@@ -3,10 +3,10 @@
 **Node.js binding for [Bothy](https://github.com/bothy-sync/bothy), a serverless, local-first
 sync engine that uses your own cloud storage as the transport.**
 
-> ⚠️ **Early development.** This is the first step of the binding (see
+> ⚠️ **Early development.** This is the second step of the binding (see
 > [#112](https://github.com/bothy-sync/bothy/issues/112)): it syncs through a shared folder
-> and can `put` and `get` whole documents. Google Drive, `patch`, `list`, `delete`, change
-> streams and encryption options come in the next steps. The package is not published yet.
+> and can `put`, `get`, `patch`, `list` and `delete` documents. Google Drive, change streams
+> and encryption options come in the next steps. The package is not published yet.
 
 It wraps the Rust engine directly, like the Python package does. For a format-only package
 without native code, see [`@bothy-sync/core`](../js).
@@ -25,7 +25,12 @@ const notes = db.collection("notes");
 await notes.put("n1", { title: "Hello", stars: 3, tags: ["a", "b"] });
 console.log(await notes.get("n1"));
 
-await db.sync(); // on the other device: pulls the note
+await notes.patch("n1", { stars: 4 }, ["tags"]); // set `stars`, remove `tags`
+console.log(await notes.list({ limit: 10 })); // [{ id: "n1", doc: { title: "Hello", stars: 4 } }]
+await notes.delete("n1");
+console.log(await db.collections()); // names of collections with at least one document
+
+await db.sync(); // on the other device: pulls the changes
 await db.close();
 ```
 
@@ -58,7 +63,7 @@ and paths), cyclic values and nesting deeper than 32.
 
 A float written by another binding (for example `1.0` from Python) reads as `1`, and writing
 that back makes it an integer. Merging is per field, so prefer changing only the fields you
-mean to change (`patch`, in the next step) over reading a document and `put`ting it back.
+mean to change (`patch`) over reading a document and `put`ting it back.
 
 A top-level field name must not start with `_`; those belong to Bothy.
 

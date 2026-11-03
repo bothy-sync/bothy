@@ -162,6 +162,14 @@ impl Database {
         })
     }
 
+    /// Names of the collections that hold at least one visible document.
+    #[napi]
+    pub async fn collections(&self) -> Result<Vec<String>> {
+        let open = self.slot.acquire().await?;
+        let names = open.db().collections().await.map_err(from_engine)?;
+        Ok(names.iter().map(|n| n.as_str().to_owned()).collect())
+    }
+
     /// Waits for operations in flight, then releases the local database. Calling it again is
     /// fine.
     #[napi]

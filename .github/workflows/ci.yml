@@ -209,7 +209,12 @@ jobs:
       - run: cargo clippy --locked -- -D warnings
       - run: npm ci
       - run: npm run build
-      - run: npm test
+      - run: cargo build --release --locked -p bothy-cli
+        working-directory: .
+      - name: Tests (with the CLI cross test)
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then exe=.exe; else exe=; fi
+          BOTHY_CLI="$GITHUB_WORKSPACE/target/release/bothy$exe" npm test
       - run: npm pack --dry-run
 
   js:

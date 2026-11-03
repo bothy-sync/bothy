@@ -55,6 +55,20 @@ export class Collection {
   put(id: string, doc: Document): Promise<boolean>;
   /** The document, or `null` if there is none. */
   get(id: string): Promise<Document | null>;
+  /**
+   * Sets the fields in `fields` and removes those named in `unset`, creating the document if
+   * needed. Resolves to whether anything changed. Prefer it over read-then-`put`: merging is per field.
+   */
+  patch(id: string, fields: Document, unset?: string[]): Promise<boolean>;
+  /** Deletes a document. Resolves to whether it existed. */
+  delete(id: string): Promise<boolean>;
+  /** Documents in id order. `limit` defaults to 100; `after` is an id to continue from. */
+  list(options?: ListOptions | null): Promise<Array<{ id: string; doc: Document }>>;
+}
+
+export interface ListOptions {
+  limit?: number;
+  after?: string;
 }
 
 /** What one `sync()` did. */
@@ -78,6 +92,8 @@ export interface SyncReport {
 export class Database {
   collection(name: string): Collection;
   static open(options: OpenOptions): Promise<Database>;
+  /** Names of the collections that hold at least one visible document. */
+  collections(): Promise<string[]>;
   /** Creates the database on the remote or joins the one that is there; returns its id (hex). */
   initOrJoin(): Promise<string>;
   /** Pushes local changes and pulls remote ones. */
