@@ -4,7 +4,8 @@ name: Release
 # uploads the archives to a draft release; publishing the release stays a manual step. When a
 # release is published, the Homebrew formula in bothy-sync/homebrew-tap follows. A manual run
 # (workflow_dispatch) and a pull request that changes the release files only build and try the
-# install script, as a dry run. Nothing here publishes to a package registry.
+# install script, as a dry run. The Python wheels are built here too, with the same clients, and
+# stay workflow artifacts for the owner to upload. Nothing here publishes to a package registry.
 
 on:
   push:
@@ -176,9 +177,70 @@ jobs:
           fi
           echo "the token can push to bothy-sync/homebrew-tap"
 
+  python-wheels:
+    name: Python wheels (${{ matrix.target }})
+    # Secrets are not available to pull requests from forks.
+    if: >-
+      github.event_name != 'release' && (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64 }
+          - { os: ubuntu-latest, target: aarch64, manylinux: "2_28" }
+          - { os: ubuntu-latest, target: armv7, manylinux: "2_28" }
+          - { os: macos-latest, target: universal2-apple-darwin }
+          - { os: windows-latest, target: x64 }
+    defaults:
+      run:
+        shell: bash
+    env:
+      BOTHY_OFFICIAL_DESKTOP_SECRET: ${{ secrets.BOTHY_OFFICIAL_DESKTOP_SECRET }}
+      BOTHY_OFFICIAL_DEVICE_SECRET: ${{ secrets.BOTHY_OFFICIAL_DEVICE_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: The official client secrets are set
+        run: |
+          if [ -z "$BOTHY_OFFICIAL_DESKTOP_SECRET" ] || [ -z "$BOTHY_OFFICIAL_DEVICE_SECRET" ]; then
+            echo "::error::BOTHY_OFFICIAL_DESKTOP_SECRET and BOTHY_OFFICIAL_DEVICE_SECRET must be set"
+            exit 1
+          fi
+      - uses: PyO3/maturin-action@v1
+        with:
+          working-directory: bindings/python
+          target: ${{ matrix.target }}
+          # ring's ARM assembly needs a newer GCC than manylinux2014 has.
+          manylinux: ${{ matrix.manylinux || 'auto' }}
+          # On Linux the build runs in a container, which gets the secrets by name.
+          docker-options: -e BOTHY_OFFICIAL_DESKTOP_SECRET -e BOTHY_OFFICIAL_DEVICE_SECRET
+          args: --release --locked -o dist
+      - name: The wheel contains the official clients
+        run: |
+          python3 - bindings/python/dist/*.whl <<'PY'
+          import os, sys, zipfile
+          secrets = [os.environ[n].encode() for n in
+                     ("BOTHY_OFFICIAL_DESKTOP_SECRET", "BOTHY_OFFICIAL_DEVICE_SECRET")]
+          wheels = sys.argv[1:]
+          assert wheels, "no wheel was built"
+          for wheel in wheels:
+              with zipfile.ZipFile(wheel) as z:
+                  native = [n for n in z.namelist() if n.endswith((".so", ".pyd"))]
+                  assert native, f"{wheel} has no native module"
+                  data = b"".join(z.read(n) for n in native)
+              if not all(s in data for s in secrets):
+                  sys.exit(f"{wheel} was built without an official client secret")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.target }}
+          path: bindings/python/dist/*.whl
+          retention-days: 7
+
   draft-release:
     name: Draft release
-    needs: [build, install-script, homebrew-token]
+    needs: [build, python-wheels, install-script, homebrew-token]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -189,6 +251,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          pattern: bothy-*
           path: dist
           merge-multiple: true
       - name: Checksums
