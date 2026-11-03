@@ -5,13 +5,25 @@ description: Create the Google Cloud project and OAuth clients Bothy signs in wi
 
 import { Steps, Aside } from '@astrojs/starlight/components';
 
-Bothy has no server, so it signs in to Google Drive with an OAuth client of **your own Google
-Cloud project**. You do this once; it takes about ten minutes and costs nothing.
+Bothy has no server, so it signs in to Google Drive through an OAuth client of a Google Cloud
+project.
 
-The command-line tool walks you through it:
+**You can skip this page** if you use the prebuilt CLI or the Python package, and don't mind
+the shared quota below. They include the clients of Bothy's own project, so `bothy auth login`
+and `bothy.auth.device_login()` work with no setup.
+
+**You need a project of your own** when:
+
+- you build an app: Google shows your app's name at sign-in, and you get your own
+  [quota](/concepts/limits/#google-drive-quota). Bothy's official clients are for Bothy's own
+  tools, so Flutter apps always bring their own;
+- you use a CLI built with `cargo install`, which has no official client;
+- you run a fleet of devices, and don't want to depend on a quota shared with everyone else.
+
+Creating one takes about ten minutes, once, and costs nothing. The command-line tool walks you
+through it:
 
 ```sh
-cargo install bothy-cli
 bothy setup google
 ```
 
@@ -25,7 +37,8 @@ The same steps by hand:
 <Aside type="caution" title="One project per database">
 Google Drive shows a project only the files that **that project's** clients created. Every
 device of one database, whether the CLI, your Flutter app or a robot, must use clients of the
-**same** Cloud project.
+**same** Cloud project. So a database created through Bothy's official client can't be opened
+through a project of your own, or the other way around. Choose before you store data.
 </Aside>
 
 <Steps>
@@ -68,7 +81,9 @@ device of one database, whether the CLI, your Flutter app or a robot, must use c
    bothy auth login
    ```
 
-   For apps, see the [Flutter guide](/guides/flutter/) and the [Python guide](/guides/python/).
+   `bothy auth status` shows which clients are in use, and `bothy auth setup --official` goes
+   back to Bothy's. For apps, see the [Flutter guide](/guides/flutter/) and the
+   [Python guide](/guides/python/).
 
 </Steps>
 

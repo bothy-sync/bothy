@@ -13,9 +13,9 @@ Windows. The API is synchronous and thread-safe, and calls release the GIL.
 ```python
 import bothy, bothy.auth
 
-grant = bothy.auth.device_login("client_tv.json")     # once, on a board without a browser
+grant = bothy.auth.device_login()                      # once, on a board without a browser
 grant.save("token.json")                               # readable only by you
-tokens = bothy.auth.TokenProvider("client_tv.json", bothy.auth.Grant.load("token.json"))
+tokens = bothy.auth.TokenProvider(None, bothy.auth.Grant.load("token.json"))
 
 db = bothy.Database.open("robot.db", app_id="com.example.robot",
                          remote=bothy.DriveRemote.folder("robot", tokens), p2p=True)
@@ -32,11 +32,17 @@ for change in db.changes(timeout=30):     # local and remote changes
 
 ## Signing in
 
-- **Boards without a browser:** `bothy.auth.device_login` with a "TVs and Limited Input
-  devices" client prints a URL and a code to enter on a phone. It only grants `drive.file`,
-  so use `DriveRemote.folder`.
-- **Desktops:** `bothy.auth.loopback_login` with a "Desktop app" client opens the browser and
-  can use `DriveRemote.appdata`.
+The wheels on PyPI include Bothy's official clients, which are used when you pass no client
+file. An app of your own should use a
+[Cloud project of its own](/start/google-cloud/): pass its client JSON file as the first
+argument to these calls and to `TokenProvider`. All devices of a database must use the same
+project.
+
+- **Boards without a browser:** `bothy.auth.device_login` prints a URL and a code to enter on
+  a phone. It only grants `drive.file`, so use `DriveRemote.folder`. Its client type is "TVs
+  and Limited Input devices".
+- **Desktops:** `bothy.auth.loopback_login` opens the browser and can use
+  `DriveRemote.appdata`. Its client type is "Desktop app".
 - **Your own tokens:** any callable `(force_refresh: bool) -> str` works as `tokens`.
 
 ## Encryption

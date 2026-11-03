@@ -5,7 +5,9 @@
 > ⚠️ **Early release (0.2).** Commands and the on-remote format can still change before 1.0.
 
 ```sh
-cargo install bothy-cli      # installs the `bothy` binary
+brew install bothy-sync/tap/bothy                    # macOS and Linux
+curl -fsSL https://bothysync.dev/install.sh | sh     # macOS and Linux, without Homebrew
+cargo install bothy-cli                              # from source; no official client
 ```
 
 ## Signing in

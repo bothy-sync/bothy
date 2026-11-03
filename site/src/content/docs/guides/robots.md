@@ -15,7 +15,7 @@ hours of offline telemetry (2,880 records), with peak memory under 32 MiB while 
 
 ```sh
 pip install bothy
-python3 agent.py login --client client_tv.json            # once: code to enter on your phone
+python3 agent.py login                                    # once: code to enter on your phone
 BOTHY_PASSWORD='…' python3 agent.py run --folder robot    # first run joins the database
 python3 agent.py run --folder robot --p2p                 # later runs use the kept key
 ```

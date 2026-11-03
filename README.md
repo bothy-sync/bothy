@@ -34,11 +34,10 @@ devices drop off and pick up files at a shared place.
 ## Quick start (CLI)
 
 ```sh
-cargo install bothy-cli
+brew install bothy-sync/tap/bothy                    # macOS and Linux
+curl -fsSL https://bothysync.dev/install.sh | sh     # macOS and Linux, without Homebrew
 
-# Your own Google Cloud OAuth client; see the setup guide in crates/bothy-cli.
-bothy auth setup --client ~/Downloads/client_secret_desktop.json
-bothy auth login
+bothy auth login                             # opens the browser; no Cloud setup needed
 
 bothy init --encrypt --remember              # on the first machine; asks for a password
 bothy put notes n1 '{"title": "Hello"}'
@@ -49,7 +48,12 @@ bothy get notes n1
 ```
 
 Headless boards sign in with `bothy auth login --device` and need a database created with
-`--remote folder` (see [why](crates/bothy-cli/README.md#appdata-or-folder)).
+`--remote folder` (see [why](crates/bothy-cli/README.md#appdata-or-folder)). On Windows, download
+the `.zip` from the [latest release](https://github.com/bothy-sync/bothy/releases/latest).
+
+These builds sign in with Bothy's official client, whose quota everyone shares. `cargo install
+bothy-cli` builds from source without it, and apps of your own should use a Cloud project of
+their own: see [Signing in](crates/bothy-cli/README.md#signing-in).
 
 ## Quick start (library)
 

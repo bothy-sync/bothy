@@ -5,7 +5,7 @@ description: Use the engine directly from async or blocking Rust.
 
 ```toml
 [dependencies]
-bothy = "0.4"
+bothy = "0.5"
 ```
 
 ```rust
