@@ -15,8 +15,16 @@ to Google Drive.
 <TabItem label="CLI">
 
 ```sh
-cargo install bothy-cli
+brew install bothy-sync/tap/bothy                    # macOS and Linux
+curl -fsSL https://bothysync.dev/install.sh | sh     # macOS and Linux, without Homebrew
+```
 
+On Windows, download the `.zip` from the
+[latest release](https://github.com/bothy-sync/bothy/releases/latest). With a Rust toolchain,
+`cargo install bothy-cli` works everywhere, but see the [note below](#2-sync-through-google-drive)
+about signing in.
+
+```sh
 # Two local databases ("a" and "b") that sync through a folder.
 bothy --db a init --remote path:./bothy-shared
 bothy --db b join --remote path:./bothy-shared
@@ -114,36 +122,32 @@ the same field and the later one wins; the other is kept in the conflict log.
 ## 2. Sync through Google Drive
 
 <Aside type="note">
-Bothy signs in with an OAuth client of **your own Google Cloud project**. Creating one takes
-about ten minutes, once: see [Set up Google sign-in](/start/google-cloud/). All devices of a
-database must use clients of the same project.
+The prebuilt CLI and the Python package sign in with Bothy's official client, so there is
+nothing to set up. Your data stays in your own Drive, and the consent screen shows "Bothy".
+A CLI built with `cargo install` has no official client, and apps of your own need their own
+Cloud project: see [Set up Google sign-in](/start/google-cloud/).
 </Aside>
 
 <Steps>
 
-1. Create the Google Cloud project and download a **Desktop app** client
-   ([guide](/start/google-cloud/)).
-
-2. Sign in and create an encrypted database on the first computer:
+1. Sign in and create an encrypted database on the first computer:
 
    ```sh
-   bothy auth setup --client ~/Downloads/client_secret_desktop.json
    bothy auth login                     # opens the browser
    bothy init --encrypt --remember      # asks for a password twice
    bothy put notes n1 '{"title": "From my laptop"}'
    bothy sync
    ```
 
-3. On the second computer, with the same client file:
+2. On the second computer:
 
    ```sh
-   bothy auth setup --client client_secret_desktop.json
    bothy auth login
    bothy join --remember                # the same password
    bothy get notes n1
    ```
 
-4. Keep both in sync in the background, with a direct channel while both are online:
+3. Keep both in sync in the background, with a direct channel while both are online:
 
    ```sh
    bothy sync --watch --p2p

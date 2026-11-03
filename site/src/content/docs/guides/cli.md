@@ -4,11 +4,17 @@ description: The bothy command, for scripts, servers and trying things out.
 ---
 
 ```sh
-cargo install bothy-cli
+brew install bothy-sync/tap/bothy                    # macOS and Linux
+curl -fsSL https://bothysync.dev/install.sh | sh     # macOS and Linux, without Homebrew
 ```
 
+On Windows, download the `.zip` from the
+[latest release](https://github.com/bothy-sync/bothy/releases/latest). These builds sign in with
+Bothy's official client. `cargo install bothy-cli` builds from source, without it, so it needs
+a [Cloud project of your own](/start/google-cloud/).
+
 ```
-bothy auth setup --client <json> [--device-client <json>]
+bothy auth setup --client <json> [--device-client <json>] | --official
 bothy auth login [--device] | logout | status
 bothy init  [--remote appdata|folder[:<name>]|path:<dir>] [--app-id <id>] [--encrypt [--remember]]
 bothy join  [--remote ...] [--db-id <id>] [--remember]
@@ -54,7 +60,6 @@ bothy put notes n1 '{"title": "Hello"}'
 bothy sync
 
 # machine 2, a headless board
-bothy auth setup --device-client client_secret_tv.json
 bothy auth login --device          # shows a code to enter at google.com/device
 bothy join --remote folder:notes
 bothy get notes n1

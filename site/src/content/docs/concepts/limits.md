@@ -23,6 +23,11 @@ If a project hits the limit, requests fail with "rate limited". Bothy backs off 
 and data is never lost; it only syncs later. A popular app can ask Google for a higher quota
 in the Cloud console.
 
+Bothy's official client is one project too, so everyone who signs in through it shares one
+quota. That suits personal use and trying things out. Apps and fleets should use a
+[project of their own](/start/google-cloud/). All devices of a database must use clients of
+the same project, so moving a database to another project means creating a new database.
+
 ## Platforms
 
 Linux (x86_64, aarch64, armv7), macOS, Windows, Android and iOS. The Rust crates need Rust
