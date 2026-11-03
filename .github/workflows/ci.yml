@@ -287,7 +287,7 @@ jobs:
         working-directory: bindings/flutter/example
         run: |
           case "$RUNNER_OS" in
-            Linux) flutter build linux --debug && flutter build apk --debug ;;
+            Linux) flutter build linux --debug && flutter build apk --debug --target-platform android-arm64,android-arm ;;
             macOS) flutter build macos --debug && flutter build ios --simulator --debug ;;
             Windows) flutter build windows --debug ;;
           esac
@@ -333,7 +333,7 @@ jobs:
       - name: Build
         run: |
           case "$RUNNER_OS" in
-            Linux) flutter build linux --debug && flutter build apk --debug ;;
+            Linux) flutter build linux --debug && flutter build apk --debug --target-platform android-arm64,android-arm ;;
             macOS) flutter build macos --debug && flutter build ios --simulator --debug ;;
             Windows) flutter build windows --debug ;;
           esac
