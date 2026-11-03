@@ -32,15 +32,6 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
-      - name: "TEMPORARY: loop the P2P delivery test"
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          fails=0
-          for i in $(seq 1 60); do
-            cargo test -q -p bothy --features p2p --test p2p --locked writes_arrive_over_the_channel > out.txt 2>&1 || { fails=$((fails+1)); grep -E "panicked|took|left|right" out.txt; }
-          done
-          echo "RUST_LOOP fails=$fails/60"
       - run: cargo clippy -p bothy --no-default-features --all-targets --locked -- -D warnings
       - run: cargo clippy -p bothy --all-features --all-targets --locked -- -D warnings
 
@@ -292,15 +283,6 @@ jobs:
       - run: cargo clippy --locked --manifest-path rust/Cargo.toml -- -D warnings
       - run: cargo build --release --locked --manifest-path rust/Cargo.toml
       - run: flutter test
-      - name: "TEMPORARY: loop the Flutter P2P test"
-        if: runner.os == 'Windows'
-        run: |
-          fails=0
-          for i in $(seq 1 30); do
-            flutter test --plain-name 'peers send writes over a direct channel' > out.txt 2>&1 || { fails=$((fails+1)); grep -E "Expected|Actual|Exception" out.txt; }
-            grep -E "P2P_TIMING" out.txt || true
-          done
-          echo "FLUTTER_LOOP fails=$fails/30"
       - name: Build the example app
         working-directory: bindings/flutter/example
         run: |

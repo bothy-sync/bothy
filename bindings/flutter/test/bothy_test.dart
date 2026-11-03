@@ -200,12 +200,7 @@ void main() {
     final arrived = b.watch().firstWhere((c) => c.id == 'm1' && c.remote);
     final clock = Stopwatch()..start();
     await a.collection('missions').put('m1', {'goal': 'dock'});
-    final wrote = clock.elapsedMilliseconds;
     await arrived.timeout(const Duration(seconds: 10));
-    // ignore: avoid_print
-    print(
-      'P2P_TIMING put=$wrote total=${clock.elapsedMilliseconds} a=${a.p2pStatus().peers.single.state} b=${b.p2pStatus().peers.single.state}',
-    );
     expect(clock.elapsed, lessThan(const Duration(seconds: 2)));
     await a.stopAutoSync();
     expect(a.p2pStatus().running, isFalse);
