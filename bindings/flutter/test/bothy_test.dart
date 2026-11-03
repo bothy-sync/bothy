@@ -201,7 +201,13 @@ void main() {
     final clock = Stopwatch()..start();
     await a.collection('missions').put('m1', {'goal': 'dock'});
     await arrived.timeout(const Duration(seconds: 10));
-    expect(clock.elapsed, lessThan(const Duration(seconds: 2)));
+    expect(
+      clock.elapsed,
+      lessThan(const Duration(seconds: 2)),
+      reason:
+          'a: ${a.p2pStatus().peers.single.state}, '
+          'b: ${b.p2pStatus().peers.single.state}',
+    );
     await a.stopAutoSync();
     expect(a.p2pStatus().running, isFalse);
     await b.stopAutoSync();
