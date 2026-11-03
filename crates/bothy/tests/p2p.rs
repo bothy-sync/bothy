@@ -3,22 +3,23 @@
 
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use bothy::p2p::{P2pConfig, PeerState};
 use bothy::remote::{ChangeBatch, FolderRemote, PutOutcome, RemoteEntry, RemoteStore};
-use bothy::{AutoSync, Config, Database, Origin, Result};
+use bothy::{AutoSync, Config, Database, Error, ErrorKind, Origin, Result};
 use serde_json::json;
 use tempfile::TempDir;
 
 const APP: &str = "com.example.notes";
 
-/// Counts downloads of segment files, to tell P2P delivery from a pull.
+/// Counts downloads of segment files and can refuse them, to tell P2P delivery from a pull.
 struct Counting {
     inner: Arc<FolderRemote>,
     segment_gets: AtomicUsize,
+    refuse_segments: AtomicBool,
 }
 
 #[async_trait]
@@ -29,6 +30,9 @@ impl RemoteStore for Counting {
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         if key.ends_with(".bseg") {
             self.segment_gets.fetch_add(1, Ordering::SeqCst);
+            if self.refuse_segments.load(Ordering::SeqCst) {
+                return Err(Error::new(ErrorKind::Offline, "segment downloads are off"));
+            }
         }
         self.inner.get(key).await
     }
@@ -89,6 +93,7 @@ async fn pair(p2p: P2pConfig, password: Option<&str>) -> Pair {
     let b_remote = Arc::new(Counting {
         inner: folder.clone(),
         segment_gets: AtomicUsize::new(0),
+        refuse_segments: AtomicBool::new(false),
     });
     let b = Database::open(cfg("b"), b_remote.clone()).await.unwrap();
     b.join(db_id).await.unwrap();
@@ -142,7 +147,9 @@ async fn writes_arrive_over_the_channel() {
     })
     .await;
 
-    let before = p.b_remote.segment_gets.load(Ordering::SeqCst);
+    // B keeps polling, and a poll may see the segment before the peer's copy arrives. With
+    // downloads refused such a poll just fails, and only the channel can deliver the write.
+    p.b_remote.refuse_segments.store(true, Ordering::SeqCst);
     let start = Instant::now();
     let waiting = arrival(&p.b, "n1", start);
     p.a.collection("notes")
@@ -152,8 +159,7 @@ async fn writes_arrive_over_the_channel() {
         .unwrap();
     let took = waiting.await;
     assert!(took < Duration::from_secs(2), "took {took:?}");
-    // Delivered by the peer, not downloaded.
-    assert_eq!(p.b_remote.segment_gets.load(Ordering::SeqCst), before);
+    p.b_remote.refuse_segments.store(false, Ordering::SeqCst);
     // And still on the remote, the durable record.
     let segs = p.folder.list("").await.unwrap();
     assert!(
