@@ -9,7 +9,7 @@ native code is compiled for each platform during the Flutter build.
 
 ```yaml
 dependencies:
-  bothy: ^0.4.0
+  bothy: ^0.5.0
 ```
 
 ## Open, write, watch
