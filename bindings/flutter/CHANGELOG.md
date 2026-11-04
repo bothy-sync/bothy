@@ -1,7 +1,11 @@
 ## 0.5.0
 
-Built on `bothy` 0.5.0, which fixes a case where writes of a restored copy of a database file
-could stay invisible to other devices. No API changes.
+Built on `bothy` 0.5.0. No API changes.
+
+- A database that isn't on the remote, as after signing in to another account, now fails with
+  `remoteInconsistent` instead of uploading to that account's Drive. Keep one database file per
+  account (#131).
+- Writes of a restored copy of a database file no longer stay invisible to other devices (#115).
 
 ## 0.4.0
 
