@@ -44,6 +44,7 @@ void backgroundEntry() {
 Future<void> _syncOnce() async {
   await Bothy.initialize();
   final secrets = SecretStore();
+  if (localRemote.isEmpty && await secrets.readAccount() == null) return;
   final key = await secrets.readKey();
   final auth = GoogleAuth(secrets);
   if (localRemote.isEmpty && !await auth.restore()) return;

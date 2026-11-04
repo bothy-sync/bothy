@@ -51,6 +51,11 @@ after Drive rejects a token. Create the clients as in
 [Set up Google sign-in](/start/google-cloud/); on Android you need an Android client
 (package name and signing SHA-1) and a Web client.
 
+**Keep one database file per Google account.** The local database belongs to one account, so
+open another `path` when another account signs in, for example with Drive's
+`about.user.permissionId` in the file name. If you open the same file under another account,
+`sync` fails with a `remoteInconsistent` error and uploads nothing.
+
 ## Encryption
 
 ```dart

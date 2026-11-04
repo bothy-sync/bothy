@@ -7,6 +7,9 @@ Built on `bothy` 0.5.0.
 - `bothy.auth.device_login()`, `loopback_login()` and `TokenProvider(None, grant)` use Bothy's
   official OAuth clients when no client file is given. Release wheels include them; a build
   from source has none and needs a client file of your own Cloud project.
+- A database that isn't on the remote, as after signing in to another account, now fails with
+  `RemoteInconsistentError` instead of uploading to that account's Drive. Keep one database
+  file per account (#131).
 - `Change` prints its fields: `Change(collection='notes', id='n1', remote=True)` (#94).
 
 ## 0.4.0

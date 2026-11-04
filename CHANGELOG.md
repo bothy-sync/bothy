@@ -46,6 +46,11 @@ optional and older versions ignore it. The Python and Flutter packages have thei
 
 ### Fixed
 
+- Engine: signing in to another account no longer uploads a database to that account's Drive.
+  A database that isn't on the remote used to sync without any error, and its unsent writes
+  landed where no device of the database could find them. `sync`, `snapshot`, `compact`,
+  `prune_device`, `change_password` and P2P signaling now first check that the manifest is
+  there, once per open, and fail with `RemoteInconsistent` if not. Local data is kept (#131).
 - CLI: every `BOTHY_HOME` now keeps its Google sign-in in its own keyring entry
   (`google:<config dir>`). Before, all homes on a machine shared one entry, and signing in
   from one home replaced the sign-in of the others. The default home keeps the old entry, so

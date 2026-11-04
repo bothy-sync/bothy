@@ -29,6 +29,24 @@ abstract class GoogleAuth {
   Future<void> signOut();
 }
 
+/// Drive's id for the signed-in account. Drive scopes are enough to read it, so the consent
+/// screen asks for nothing more.
+Future<String> driveAccountId(GoogleAuth auth) async {
+  final token = await auth.token(false);
+  if (token == null) throw StateError('not signed in to Google');
+  final res = await http.get(
+    Uri.https('www.googleapis.com', '/drive/v3/about', {
+      'fields': 'user(permissionId)',
+    }),
+    headers: {'Authorization': 'Bearer $token'},
+  );
+  if (res.statusCode != 200) {
+    throw StateError('cannot read the Google account (${res.statusCode})');
+  }
+  final user = (jsonDecode(res.body) as Map)['user'] as Map;
+  return user['permissionId'] as String;
+}
+
 /// Android and iOS: the platform account picker (`google_sign_in`).
 class _MobileAuth implements GoogleAuth {
   static Future<void>? _initialized;
