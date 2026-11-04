@@ -29,6 +29,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Changed
 
+- CLI: `bothy auth logout` forgets the sign-in on this machine only. It used to revoke it at
+  Google, which works per Cloud project and so signed out all of the user's devices, including
+  boards that have no browser to sign in again with. `--revoke` does that when you mean it
+  (#133).
 - OAuth: `Grant` records the id of the client that issued it (`client_id`; `None` for grants
   stored by earlier versions). The CLI uses it to say "sign in again" after a switch between
   clients, instead of failing with a refresh error. Breaking for code that builds `Grant`

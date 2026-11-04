@@ -91,7 +91,7 @@ runs this between your computer and a Linux container.
 
 ```
 bothy auth setup --client <json> [--device-client <json>] | --official
-bothy auth login [--device] | logout | status
+bothy auth login [--device] | logout [--revoke] | status
 bothy init  [--name <db>] [--remote appdata|folder[:<name>]|path:<dir>] [--app-id <id>] [--encrypt [--remember]]
 bothy join  [--name <db>] [--remote ...] [--db-id <id>] [--remember]
 bothy unlock [--remember] | lock | passwd

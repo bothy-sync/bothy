@@ -67,7 +67,15 @@ class AppState extends ChangeNotifier {
 
   Future<void> signIn() => _guard(() async {
     await auth.signIn();
-    await secrets.writeAccount(await driveAccountId(auth));
+    String account;
+    try {
+      account = await driveAccountId(auth);
+    } on SignInExpired {
+      // The platform handed out a dead token and has now dropped it: this time it asks.
+      await auth.signIn();
+      account = await driveAccountId(auth);
+    }
+    await secrets.writeAccount(account);
     await _open();
   });
 

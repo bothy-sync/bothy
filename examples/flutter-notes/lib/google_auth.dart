@@ -29,17 +29,28 @@ abstract class GoogleAuth {
   Future<void> signOut();
 }
 
+/// The stored sign-in no longer works, and only a new interactive sign-in can fix that.
+class SignInExpired implements Exception {
+  const SignInExpired();
+
+  @override
+  String toString() => 'Sign in to Google again.';
+}
+
 /// Drive's id for the signed-in account. Drive scopes are enough to read it, so the consent
 /// screen asks for nothing more.
 Future<String> driveAccountId(GoogleAuth auth) async {
-  final token = await auth.token(false);
-  if (token == null) throw StateError('not signed in to Google');
-  final res = await http.get(
-    Uri.https('www.googleapis.com', '/drive/v3/about', {
-      'fields': 'user(permissionId)',
-    }),
-    headers: {'Authorization': 'Bearer $token'},
-  );
+  Future<http.Response?> about(String? token) async => token == null
+      ? null
+      : http.get(
+          Uri.https('www.googleapis.com', '/drive/v3/about', {
+            'fields': 'user(permissionId)',
+          }),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+  var res = await about(await auth.token(false));
+  if (res?.statusCode == 401) res = await about(await auth.token(true));
+  if (res == null || res.statusCode == 401) throw const SignInExpired();
   if (res.statusCode != 200) {
     throw StateError('cannot read the Google account (${res.statusCode})');
   }
@@ -78,9 +89,13 @@ class _MobileAuth implements GoogleAuth {
   @override
   Future<String?> token(bool forceRefresh) async {
     if (!forceRefresh && _token != null) return _token;
-    final auth = await _user?.authorizationClient.authorizationForScopes([
-      driveScope,
-    ]);
+    final client = _user?.authorizationClient;
+    final rejected = _token;
+    // Until it is cleared, the platform can hand back the token that was just rejected.
+    if (forceRefresh && rejected != null) {
+      await client?.clearAuthorizationToken(accessToken: rejected);
+    }
+    final auth = await client?.authorizationForScopes([driveScope]);
     return _token = auth?.accessToken;
   }
 
@@ -186,17 +201,9 @@ class _DesktopAuth implements GoogleAuth {
 
   @override
   Future<void> signOut() async {
-    final refresh = _refreshToken;
+    // This device only: Google revokes per Cloud project, which would sign out the others too.
     _refreshToken = _token = null;
     await _secrets.delete(_refreshKey);
-    if (refresh != null) {
-      await http
-          .post(
-            Uri.https('oauth2.googleapis.com', '/revoke'),
-            body: {'token': refresh},
-          )
-          .catchError((_) => http.Response('', 200));
-    }
   }
 
   void _remember(Map<String, Object?> body) {

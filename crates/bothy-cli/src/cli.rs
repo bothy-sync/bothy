@@ -174,8 +174,13 @@ pub enum Auth {
         #[arg(long)]
         device: bool,
     },
-    /// Revoke and forget the sign-in.
-    Logout,
+    /// Forget the sign-in on this machine.
+    Logout {
+        /// Also end the access at Google, which signs out every device of this account that uses
+        /// the same Cloud project.
+        #[arg(long)]
+        revoke: bool,
+    },
     /// Show the sign-in state (never prints tokens).
     Status,
 }
