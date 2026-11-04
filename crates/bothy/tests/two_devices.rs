@@ -367,3 +367,48 @@ async fn signaling_files_are_ignored_by_sync() {
     let got = b.collection("notes").unwrap().get("n1").await.unwrap();
     assert!(got.is_some());
 }
+
+/// Signing in to another account changes the remote under an attached database.
+#[tokio::test]
+async fn a_remote_without_this_database_gets_nothing() {
+    let setup = Setup::new();
+    let a = setup.open("a").await;
+    let db_id = a.init().await.unwrap();
+    let notes = a.collection("notes").unwrap();
+    notes.put("sent", json!({"v": 1})).await.unwrap();
+    a.sync().await.unwrap();
+    notes.put("unsent", json!({"v": 2})).await.unwrap();
+    drop((a, notes));
+
+    let other = Arc::new(FolderRemote::new(setup.dir.path().join("other")).unwrap());
+    let a = Database::open(setup.config("a"), other.clone())
+        .await
+        .unwrap();
+    let refused = |e: Error| {
+        assert_eq!(e.kind(), ErrorKind::RemoteInconsistent, "{e}");
+        assert!(e.message().contains("not on this remote"), "{e}");
+    };
+    refused(a.sync().await.unwrap_err());
+    refused(a.snapshot().await.unwrap_err());
+    refused(a.compact(false).await.unwrap_err());
+    refused(a.prune_device(a.device_id()).await.unwrap_err());
+    assert_eq!(other.list("").await.unwrap(), vec![]);
+
+    // The local data is intact, and the right remote still works.
+    let notes = a.collection("notes").unwrap();
+    assert!(notes.get("sent").await.unwrap().is_some());
+    assert!(notes.get("unsent").await.unwrap().is_some());
+    drop((a, notes));
+    let a = setup.open("a").await;
+    assert_eq!(a.sync().await.unwrap().pushed_ops, 1);
+    let b = setup.open("b").await;
+    b.join(db_id).await.unwrap();
+    assert!(
+        b.collection("notes")
+            .unwrap()
+            .get("unsent")
+            .await
+            .unwrap()
+            .is_some()
+    );
+}

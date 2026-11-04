@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use bothy::p2p::{P2pConfig, PeerState};
 use bothy::remote::{ChangeBatch, FolderRemote, PutOutcome, RemoteEntry, RemoteStore};
-use bothy::{AutoSync, Config, Database, Error, ErrorKind, Origin, Result};
+use bothy::{AutoSync, Config, Database, Error, ErrorKind, Origin, Result, SyncStatus};
 use serde_json::json;
 use tempfile::TempDir;
 
@@ -263,4 +263,40 @@ async fn encrypted_signaling_leaks_no_addresses() {
     assert!(seen > 0, "no signaling files to check");
     ha.stop().await;
     hb.stop().await;
+}
+
+/// After signing in to another account, not even signaling files reach its storage.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_remote_without_this_database_gets_no_signaling() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = || Config::new(dir.path().join("a.db"), APP).p2p(p2p());
+    let first = Arc::new(FolderRemote::new(dir.path().join("first")).unwrap());
+    let a = Database::open(config(), first).await.unwrap();
+    a.init().await.unwrap();
+    drop(a);
+
+    let other = Arc::new(FolderRemote::new(dir.path().join("other")).unwrap());
+    let a = Database::open(config(), other.clone()).await.unwrap();
+    let handle = a.start_auto_sync(auto());
+    let mut status = handle.watch();
+    tokio::time::timeout(Duration::from_secs(10), status.changed())
+        .await
+        .expect("no sync finished")
+        .unwrap();
+    assert!(
+        matches!(
+            handle.status(),
+            SyncStatus::Failed {
+                kind: ErrorKind::RemoteInconsistent,
+                ..
+            }
+        ),
+        "{:?}",
+        handle.status()
+    );
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    let during = other.list("").await.unwrap();
+    handle.stop().await;
+    assert_eq!(during, vec![]);
+    assert_eq!(other.list("").await.unwrap(), vec![]);
 }

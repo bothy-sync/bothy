@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:bothy/bothy.dart';
 import 'package:flutter/foundation.dart';
@@ -35,10 +36,11 @@ class AppState extends ChangeNotifier {
   Timer? _p2pTimer;
   StreamSubscription<BothyChange>? _bench;
 
-  /// A local-folder run gets its own file, so it never mixes with the Drive database.
+  /// Each Google account gets its own file, so another account on this device neither sees
+  /// the notes nor syncs them into its Drive. A local-folder run gets its own file too.
   static Future<String> databasePath() async =>
       '${(await getApplicationSupportDirectory()).path}/'
-      'notes$storageTag.db';
+      'notes${await SecretStore().accountTag()}.db';
 
   /// The folder for `BOTHY_LOCAL_REMOTE`; a relative path is inside the app's support
   /// directory (sandboxed macOS apps cannot write elsewhere).
@@ -59,17 +61,29 @@ class AppState extends ChangeNotifier {
       stage = Stage.signIn;
       return;
     }
+    if (localRemote.isEmpty) await _identify();
     await _open();
   });
 
   Future<void> signIn() => _guard(() async {
     await auth.signIn();
+    await secrets.writeAccount(await driveAccountId(auth));
     await _open();
   });
+
+  /// Rechecks who is signed in. Offline, the account from the last sign-in stands.
+  Future<void> _identify() async {
+    try {
+      await secrets.writeAccount(await driveAccountId(auth));
+    } on SocketException {
+      if (await secrets.readAccount() == null) rethrow;
+    }
+  }
 
   Future<void> signOut() => _guard(() async {
     await _close();
     await auth.signOut();
+    await secrets.deleteAccount();
     stage = Stage.signIn;
   });
 

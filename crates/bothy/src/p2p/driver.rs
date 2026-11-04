@@ -6,6 +6,7 @@
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use str0m::change::{SdpAnswer, SdpOffer, SdpPendingOffer};
@@ -734,6 +735,10 @@ impl Driver {
     fn housekeeping(&mut self) {
         let now = Instant::now();
         if self.db_id.is_none() {
+            return;
+        }
+        // Nothing goes on a remote until a sync has found this database there.
+        if !self.inner.on_remote.load(Ordering::Acquire) {
             return;
         }
         // A fork gives this device a new id.

@@ -6,6 +6,7 @@ mod maintenance;
 mod scheduler;
 
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use crate::codec::keys::{KeyKind, LogicalKey};
 use crate::codec::manifest::{Compression, DeviceInfo, Manifest};
@@ -79,7 +80,30 @@ async fn attach(inner: &Arc<Inner>, manifest: &Manifest) -> Result<()> {
             s.set_grace_period_days(grace)?;
             s.set_db_id(db_id)
         })
-        .await
+        .await?;
+    inner.on_remote.store(true, Ordering::Release);
+    Ok(())
+}
+
+/// Fails if this database is not on the remote, as after signing in to another account.
+/// Anything uploaded there would land in that account's storage, where no device of the database
+/// can find it. Reads the manifest directly, once per open, before the first write.
+pub(crate) async fn ensure_on_remote(inner: &Inner, db_id: DbId) -> Result<()> {
+    if inner.on_remote.load(Ordering::Acquire) {
+        return Ok(());
+    }
+    let key = LogicalKey::manifest(db_id).to_string();
+    if inner.remote.get(&key).await?.is_none() {
+        return Err(Error::new(
+            ErrorKind::RemoteInconsistent,
+            format!(
+                "database {db_id} is not on this remote; if you signed in to a different \
+                 account, sign in to the one that holds it. Local data is kept"
+            ),
+        ));
+    }
+    inner.on_remote.store(true, Ordering::Release);
+    Ok(())
 }
 
 pub(crate) async fn init(inner: &Arc<Inner>) -> Result<DbId> {
@@ -452,6 +476,7 @@ pub(crate) async fn sync(inner: &Arc<Inner>) -> Result<SyncReport> {
     })?;
     // Fail fast while an encrypted database is locked.
     sync_key(inner).await?;
+    ensure_on_remote(inner, db_id).await?;
     let mut report = SyncReport::default();
     let fetched = fetch(inner, db_id).await?;
     inner.p2p_signals(&fetched.entries);
