@@ -2,7 +2,7 @@
 
 **Serverless, local-first sync engine that uses the user's own cloud storage as the transport.**
 
-> ⚠️ **Early release (0.4).** The API and the on-remote format can still change before 1.0. Keep
+> ⚠️ **Early release (0.5).** The API and the on-remote format can still change before 1.0. Keep
 > a backup of data you care about.
 
 In Scotland and northern England, a *bothy* is an unlocked mountain shelter that belongs to no

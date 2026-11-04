@@ -376,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "bothy"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "argon2",
  "async-trait",
@@ -400,7 +400,7 @@ dependencies = [
 
 [[package]]
 name = "bothy-oauth"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "base64",
@@ -417,7 +417,7 @@ dependencies = [
 
 [[package]]
 name = "bothy-python"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "bothy",

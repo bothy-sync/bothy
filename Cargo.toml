@@ -4,7 +4,7 @@ members = ["crates/bothy", "crates/bothy-cli", "crates/bothy-conformance", "crat
 exclude = ["fuzz", "bindings/flutter/rust"]
 
 [workspace.package]
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT OR Apache-2.0"
@@ -13,8 +13,8 @@ repository = "https://github.com/bothy-sync/bothy"
 homepage = "https://github.com/bothy-sync/bothy"
 
 [workspace.dependencies]
-bothy = { path = "crates/bothy", version = "0.4.0" }
-bothy-oauth = { path = "crates/bothy-oauth", version = "0.4.0" }
+bothy = { path = "crates/bothy", version = "0.5.0" }
+bothy-oauth = { path = "crates/bothy-oauth", version = "0.5.0" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
