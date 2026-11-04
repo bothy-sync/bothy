@@ -2,6 +2,7 @@
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, RwLock};
 
 use tokio::sync::{Notify, broadcast};
@@ -270,6 +271,8 @@ pub(crate) struct Inner {
     pub(crate) poke: Notify,
     /// A peer says the remote has something new: sync now, without the debounce.
     pub(crate) remote_hint: Notify,
+    /// The remote is known to hold this database ([`engine::ensure_on_remote`]).
+    pub(crate) on_remote: AtomicBool,
     #[cfg(feature = "p2p")]
     pub(crate) p2p_config: Option<crate::p2p::P2pConfig>,
     #[cfg(feature = "p2p")]
@@ -445,6 +448,7 @@ impl Database {
                 events,
                 poke: Notify::new(),
                 remote_hint: Notify::new(),
+                on_remote: AtomicBool::new(false),
                 #[cfg(feature = "p2p")]
                 p2p_config: p2p,
                 #[cfg(feature = "p2p")]
@@ -542,6 +546,7 @@ impl Database {
     pub async fn snapshot(&self) -> Result<String> {
         let db_id = self.attached().await?;
         let _sync = self.inner.sync_lock.lock().await;
+        engine::ensure_on_remote(&self.inner, db_id).await?;
         engine::create_snapshot(&self.inner, db_id).await
     }
 
@@ -550,6 +555,7 @@ impl Database {
     pub async fn compact(&self, dry_run: bool) -> Result<CompactReport> {
         let db_id = self.attached().await?;
         let _sync = self.inner.sync_lock.lock().await;
+        engine::ensure_on_remote(&self.inner, db_id).await?;
         engine::compact(&self.inner, db_id, dry_run).await
     }
 
@@ -590,6 +596,7 @@ impl Database {
     pub async fn prune_device(&self, device: DeviceId) -> Result<Vec<String>> {
         let db_id = self.attached().await?;
         let _sync = self.inner.sync_lock.lock().await;
+        engine::ensure_on_remote(&self.inner, db_id).await?;
         engine::prune_device(&self.inner, db_id, device).await
     }
 
@@ -647,6 +654,7 @@ impl Database {
     pub async fn change_password(&self, old: &str, new: &str) -> Result<()> {
         let db_id = self.attached().await?;
         let _sync = self.inner.sync_lock.lock().await;
+        engine::ensure_on_remote(&self.inner, db_id).await?;
         crate::engine::crypto::change_password(&self.inner, db_id, old, new).await
     }
 

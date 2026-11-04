@@ -9,7 +9,8 @@ import 'config.dart';
 
 bool get isMobile => Platform.isAndroid || Platform.isIOS;
 
-/// Small secrets: the database key and, on desktop, the Google refresh token.
+/// Small secrets: the database key and, on desktop, the Google refresh token. Also which
+/// Google account is signed in, so a database never opens under another account.
 ///
 /// Phones use the platform keystore (Keychain, Android Keystore). Desktop builds of this
 /// demo keep a file readable only by the user, because the macOS Keychain needs a signed
@@ -44,16 +45,33 @@ class SecretStore {
     if (await f.exists()) await f.delete();
   }
 
-  /// A local-folder run keeps its key apart from the Drive database's.
-  static String get _keyName =>
-      'database_key${storageTag.replaceAll('-', '_')}';
+  static const _accountKey = 'google_account';
+
+  Future<String?> readAccount() => read(_accountKey);
+
+  Future<void> writeAccount(String id) => write(_accountKey, id);
+
+  Future<void> deleteAccount() => delete(_accountKey);
+
+  /// Tells apart what each Google account keeps on this device. A local-folder run has no
+  /// account, and [storageTag] keeps it apart from the Drive databases.
+  Future<String> accountTag() async {
+    if (localRemote.isNotEmpty) return storageTag;
+    final account = await readAccount();
+    if (account == null) throw StateError('no Google account is signed in');
+    return '-$account';
+  }
+
+  Future<String> _keyName() async =>
+      'database_key${(await accountTag()).replaceAll('-', '_')}';
 
   Future<Uint8List?> readKey() async {
-    final s = await read(_keyName);
+    final s = await read(await _keyName());
     return s == null ? null : base64Decode(s);
   }
 
-  Future<void> writeKey(Uint8List key) => write(_keyName, base64Encode(key));
+  Future<void> writeKey(Uint8List key) async =>
+      write(await _keyName(), base64Encode(key));
 
-  Future<void> deleteKey() => delete(_keyName);
+  Future<void> deleteKey() async => delete(await _keyName());
 }
