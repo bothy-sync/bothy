@@ -1598,14 +1598,21 @@ async fn auth(ctx: &Ctx, a: Auth) -> CliResult<()> {
             );
             Ok(())
         }
-        Auth::Logout => {
-            if let Some(g) = tokens::load(&ctx.paths)
+        Auth::Logout { revoke } => {
+            if revoke
+                && let Some(g) = tokens::load(&ctx.paths)
                 && let Err(e) = oauth::revoke(&g.refresh_token).await
             {
                 eprintln!("warning: {e}; forgetting the local sign-in anyway");
             }
             tokens::clear(&ctx.paths);
-            ctx.out(json!({"signed_in": false}), || "signed out".into());
+            ctx.out(json!({"signed_in": false}), || {
+                if revoke {
+                    "signed out, and revoked at Google".into()
+                } else {
+                    "signed out of this machine".into()
+                }
+            });
             Ok(())
         }
         Auth::Status => {

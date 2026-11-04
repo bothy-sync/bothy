@@ -9,7 +9,7 @@ cargo install bothy-cli
 
 ```
 bothy auth setup --client <json> [--device-client <json>]
-bothy auth login [--device] | logout | status
+bothy auth login [--device] | logout [--revoke] | status
 bothy init  [--remote appdata|folder[:<name>]|path:<dir>] [--app-id <id>] [--encrypt [--remember]]
 bothy join  [--remote ...] [--db-id <id>] [--remember]
 bothy unlock [--remember] | lock | passwd

@@ -53,9 +53,10 @@ not used for advertising, and not read by people.
 
 ## Removing access
 
-Sign out in the software (`bothy auth logout`, or *Sign out* in the app), or remove the app at
-[myaccount.google.com/permissions](https://myaccount.google.com/permissions). To remove the
-data, delete the app's data in Google Drive (Settings → Manage apps) and the local database
+Signing out in the software (`bothy auth logout`, or *Sign out* in the app) forgets the sign-in
+on that device. To end the access on all your devices, remove the app at
+[myaccount.google.com/permissions](https://myaccount.google.com/permissions) or run
+`bothy auth logout --revoke`. To remove the data, delete the app's data in Google Drive (Settings → Manage apps) and the local database
 files.
 
 ## Contact
